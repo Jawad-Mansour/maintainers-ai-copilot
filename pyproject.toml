@@ -6,19 +6,6 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = []
 
-[project.optional-dependencies]
-dev = [
-    "ruff>=0.4.0",
-    "mypy>=1.10.0",
-    "pre-commit>=3.7.0",
-    "pytest>=8.2.0",
-    "pytest-asyncio>=0.23.0",
-    "respx>=0.21.0",
-    "factory-boy>=3.3.0",
-    "testcontainers>=4.5.0",
-    "httpx>=0.27.0",
-]
-
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
@@ -26,6 +13,20 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["."]
 include = []
+
+# Dev tools — installed via: uv add --dev <package>
+[dependency-groups]
+dev = [
+    "mypy>=2.1.0",
+    "pre-commit>=4.6.0",
+    "ruff>=0.15.13",
+    "pytest>=8.2.0",
+    "pytest-asyncio>=0.23.0",
+    "respx>=0.21.0",
+    "factory-boy>=3.3.0",
+    "testcontainers>=4.5.0",
+    "httpx>=0.27.0",
+]
 
 [tool.ruff]
 line-length = 100
@@ -42,17 +43,9 @@ known-first-party = ["app"]
 strict = true
 ignore_missing_imports = true
 python_version = "3.12"
-# Each service (chatbot/, modelserver/, widget/) runs mypy independently in CI.
-# Root mypy only covers api/ to avoid module name collisions across services.
+# Root mypy covers api/ only. Each other service runs mypy independently in CI.
 exclude = ["notebooks/", ".specify/", ".claude/", "chatbot/", "modelserver/", "widget/", "host/"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-
-[dependency-groups]
-dev = [
-    "mypy>=2.1.0",
-    "pre-commit>=4.6.0",
-    "ruff>=0.15.13",
-]
