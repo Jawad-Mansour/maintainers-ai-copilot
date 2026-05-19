@@ -1,0 +1,55 @@
+# Secrets — NEVER commit
+.env
+*.pem
+*.key
+*.p12
+*.pfx
+*.cert
+*.crt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+dist/
+.parcel-cache/
+*.tsbuildinfo
+
+# Docker
+*.dockerignore
+
+# ML artifacts (stored in MinIO, not git)
+*.pt
+*.pth
+*.onnx
+*.pkl
+*.bin
+*.safetensors
+eval_report.json
+wandb/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+.venv/

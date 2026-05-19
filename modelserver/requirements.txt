@@ -1,0 +1,13 @@
+# Model server dependencies (DistilBERT inference + NER)
+# Note: torch install varies by CUDA availability — see Dockerfile
+
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+transformers>=4.41.0
+torch>=2.3.0
+spacy>=3.7.0
+sentence-transformers>=3.0.0
+numpy>=1.26.0
+minio>=7.2.0
+hvac>=2.2.0
+httpx>=0.27.0

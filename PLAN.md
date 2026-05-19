@@ -1,7 +1,7 @@
 # Maintainer's AI Copilot — Complete Implementation Plan
 
-**Deadline:** Thursday May 21, 2026 @ 12:00 PM (~44 hours from start)  
-**Submission tag:** `v0.1.0-week7`  
+**Deadline:** Thursday May 21, 2026 @ 12:00 PM (~44 hours from start)
+**Submission tag:** `v0.1.0-week7`
 **Constraint:** ML/DL phase is last; all other phases must be fully functional with mock ML endpoints before Phase 7.
 
 ---
@@ -539,7 +539,9 @@ Start Colab fine-tuning (Phase 7 training) in the background **during Phase 3** 
   - Load GitHub issues dataset (source: GUIDELINES.md / assignment corpus)
   - Apply 7-step preprocessing pipeline
   - 4-class label mapping: bug / feature / docs / question
-  - Train/val/test split: 70/15/15, stratified
+  - Split: sort by `created_at` → train = oldest 70%, val = next 15%, test = most recent 15%
+  - Stratify within each time window to preserve class proportions
+  - Test set is strictly more recent in time than train (assignment requirement — prevents data leakage)
   - Save as `train.jsonl`, `val.jsonl`, `test.jsonl` to MinIO `models/` bucket
   - Log dataset stats with W&B
 
@@ -713,7 +715,7 @@ Start Colab fine-tuning (Phase 7 training) in the background **during Phase 3** 
 | E2E | docker-compose + curl/httpx scripts | Phase 8 |
 | Eval suite | RAGAS, scikit-learn metrics | Phases 6–7 |
 
-**Run command:** `uv run pytest tests/ -m "not e2e" --tb=short -q`  
+**Run command:** `uv run pytest tests/ -m "not e2e" --tb=short -q`
 **E2E:** `uv run pytest tests/e2e/ -m e2e`
 
 ---

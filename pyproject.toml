@@ -1,0 +1,58 @@
+[project]
+name = "maintainers-ai-copilot"
+version = "0.1.0"
+description = "Authenticated AI chatbot for open-source maintainers to triage GitHub issues"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.4.0",
+    "mypy>=1.10.0",
+    "pre-commit>=3.7.0",
+    "pytest>=8.2.0",
+    "pytest-asyncio>=0.23.0",
+    "respx>=0.21.0",
+    "factory-boy>=3.3.0",
+    "testcontainers>=4.5.0",
+    "httpx>=0.27.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = []
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.mypy]
+strict = true
+ignore_missing_imports = true
+python_version = "3.12"
+# Each service (chatbot/, modelserver/, widget/) runs mypy independently in CI.
+# Root mypy only covers api/ to avoid module name collisions across services.
+exclude = ["notebooks/", ".specify/", ".claude/", "chatbot/", "modelserver/", "widget/", "host/"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "mypy>=2.1.0",
+    "pre-commit>=4.6.0",
+    "ruff>=0.15.13",
+]

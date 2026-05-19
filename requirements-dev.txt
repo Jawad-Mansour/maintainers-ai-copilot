@@ -1,0 +1,20 @@
+# Root-level dev tools (linting, type checking, testing, pre-commit)
+# Generated via: uv pip freeze --python .venv/Scripts/python.exe
+
+ast-serialize==0.5.0
+cfgv==3.5.0
+distlib==0.4.0
+filelock==3.29.0
+identify==2.6.19
+librt==0.11.0
+mypy==2.1.0
+mypy-extensions==1.1.0
+nodeenv==1.10.0
+pathspec==1.1.1
+platformdirs==4.9.6
+pre-commit==4.6.0
+python-discovery==1.3.1
+pyyaml==6.0.3
+ruff==0.15.13
+typing-extensions==4.15.0
+virtualenv==21.3.3
