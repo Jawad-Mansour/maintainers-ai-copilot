@@ -86,10 +86,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("summary", sa.Text, nullable=False),
-        sa.Column(
-            "embedding",
-            sa.Column.__class__.__mro__[0],  # placeholder — see raw SQL below
-        ),
+        sa.Column("embedding", sa.Text, nullable=True),  # dropped and re-added via raw SQL below
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),

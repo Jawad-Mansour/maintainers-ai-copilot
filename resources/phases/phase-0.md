@@ -75,13 +75,23 @@ MinIO credentials, Langfuse keys) at startup. This is the Vault bootstrap patter
 
 ### 3. `pyproject.toml`
 
-Single source of truth for the entire Python toolchain:
+Single source of truth for the entire Python toolchain. Current complete state:
 
 ```toml
 [project]
 name = "maintainers-ai-copilot"
 version = "0.1.0"
+description = "Authenticated AI chatbot for open-source maintainers to triage GitHub issues"
 requires-python = ">=3.12"
+dependencies = []
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = []
 
 [dependency-groups]
 dev = [
@@ -90,10 +100,19 @@ dev = [
     "ruff>=0.15.13",
     "pytest>=8.2.0",
     "pytest-asyncio>=0.23.0",
-    "respx>=0.21.0",        # Mock HTTP calls in tests
-    "factory-boy>=3.3.0",   # Test fixtures
-    "testcontainers>=4.5.0", # Real postgres/redis in integration tests
-    "httpx>=0.27.0",         # Async HTTP client for E2E tests
+    "respx>=0.21.0",
+    "factory-boy>=3.3.0",
+    "testcontainers>=4.5.0",
+    "httpx>=0.27.0",
+    # API packages needed to run root-level tests against api/ code
+    "hvac>=2.3.0",
+    "pyyaml>=6.0",
+    "pydantic-settings>=2.0",
+    "fastapi>=0.115.0",
+    "sqlalchemy[asyncio]>=2.0",
+    "alembic>=1.13.0",
+    "psycopg2-binary>=2.9",
+    "redis>=5.0",
 ]
 
 [tool.ruff]
@@ -102,17 +121,84 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
 
 [tool.mypy]
 strict = true
 ignore_missing_imports = true
 python_version = "3.12"
-exclude = ["notebooks/", ".specify/", ".claude/", "chatbot/", "modelserver/", "widget/", "host/"]
+exclude = [
+    "api/",
+    "tests/",
+    "notebooks/",
+    ".specify/",
+    ".claude/",
+    "chatbot/",
+    "modelserver/",
+    "widget/",
+    "host/",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+pythonpath = ["api"]
 ```
+
+**Why `setuptools` instead of the default `hatchling`?**
+`uv init` defaults to hatchling. But hatchling requires a Python package directory
+matching the project name (`maintainers-ai-copilot/`). This is a monorepo — there
+is no single top-level package. Switched to setuptools with `include = []` which
+lets `uv add --dev` work without needing a matching package directory.
+
+**Why `dependencies = []` at the project level?**
+The project is a monorepo. Each service (`api/`, `chatbot/`, etc.) manages its own
+dependencies in `requirements.txt`. The root `pyproject.toml` only manages dev tools.
+Having `dependencies = []` explicitly at the project level prevents any accidental
+installation of project-level packages.
+
+**Why are API packages (`hvac`, `pydantic-settings`, etc.) in root dev deps?**
+The integration tests in `tests/` import from `api/` code (e.g. `from api.app.infra.vault
+import fetch_vault_secrets`). For these imports to resolve at the root level, the packages
+that `api/` code depends on must also be installed in the root `.venv`. These are test
+dependencies — not production dependencies for the API service itself.
+
+**Why `pythonpath = ["api"]`?**
+`api/main.py` does `from config import get_settings` — a bare import that only works if
+`api/` is on `sys.path`. Without `pythonpath = ["api"]` in the pytest config, running
+`pytest tests/` from the repo root fails with `ModuleNotFoundError: No module named 'config'`.
+This setting appends `api/` to `sys.path` during every test run.
+
+**Ruff rule sets explained:**
+- `E` — pycodestyle errors (spacing, indentation)
+- `F` — pyflakes (unused imports, undefined names)
+- `I` — isort (import ordering)
+- `UP` — pyupgrade (use modern Python syntax, e.g. `list[str]` instead of `List[str]`)
+- `B` — flake8-bugbear (common bug patterns, e.g. mutable defaults)
+- `SIM` — flake8-simplify (unnecessary complexity)
+
+**`known-first-party = ["app"]`:** Tells ruff's isort that `app` is a first-party
+module (not a third-party package). This ensures `from app.infra.vault import ...`
+is grouped with project imports, not third-party ones.
+
+**Why mypy strict:** Catches async/await errors, missing return types, incorrect
+SQLAlchemy model usage, wrong Pydantic field types — all before runtime.
+
+**Why mypy excludes `api/` and `tests/`:** These service directories have their own
+package dependencies (fastapi, sqlalchemy, pydantic-settings) that are not installed
+in the root `.venv` when mypy runs at the project level. Running mypy across them from
+root causes "Class cannot subclass X (has type Any)" errors for every SQLAlchemy model
+and every Pydantic Settings class. Each service runs mypy independently inside its own
+Docker build step with the correct packages installed.
+
+**Why also exclude `chatbot/`, `modelserver/`, `widget/`, `host/`:** Same reason —
+module name collisions and missing dependencies.
+
+**Why `asyncio_mode = "auto"`:** All tests are async (FastAPI, SQLAlchemy async,
+Redis async). Without this, every test needs `@pytest.mark.asyncio` manually.
 
 **Ruff rule sets explained:**
 - `E` — pycodestyle errors (spacing, indentation)
@@ -132,6 +218,40 @@ the root causes module name collisions (e.g. both `chatbot/app.py` and
 
 **Why `asyncio_mode = "auto"`:** All tests are async (FastAPI, SQLAlchemy async,
 Redis async). Without this, every test needs `@pytest.mark.asyncio` manually.
+
+### Developer Onboarding Flow
+
+Any new developer cloning the repo follows exactly these steps:
+
+```bash
+# 1. Install uv (Python package manager)
+pip install uv
+
+# 2. Create virtual environment and install dev tools
+uv sync --dev
+
+# 3. Install pre-commit hooks into git
+uv run pre-commit install
+
+# 4. Copy the bootstrap .env file
+cp .env.example .env
+# .env only has VAULT_ADDR and port mappings — no real secrets
+
+# 5. Verify everything works
+uv run ruff check .          # → All checks passed!
+uv run mypy .                # → Success: no issues found
+uv run pytest tests/ -v      # → Unit tests pass (integration need Docker)
+```
+
+**Pre-commit first-commit flow:**
+On the first commit, ruff-format may auto-format files. The commit will fail.
+Stage the reformatted files and commit again — the second attempt passes:
+```bash
+git add .
+git commit -m "..."   # fails — ruff-format modifies files
+git add .
+git commit -m "..."   # passes — files already formatted
+```
 
 ### 4. `.pre-commit-config.yaml`
 

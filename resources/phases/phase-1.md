@@ -498,6 +498,8 @@ The full admin panel is built in Phase 5.
 
 ## Issues Encountered & Fixed
 
+### Pre-commit hook failures (first commit attempt)
+
 | Issue | Root Cause | Fix |
 |-------|-----------|-----|
 | `ruff I001` (import order) | 6 files had unsorted imports after initial write | `uv run ruff check . --fix` auto-fixed all |
@@ -507,8 +509,55 @@ The full admin panel is built in Phase 5.
 | `ruff B008` (Depends in defaults) | Stub `get_db(settings = Depends(...))` — B008 forbids function calls in defaults | Simplified stubs to `get_db() -> None` |
 | `ruff SIM117` (nested with) | `with patch(...): with pytest.raises(...)` | Merged into `with patch(...), pytest.raises(...)` |
 | `ruff F401` (unused imports) | `importlib`, `sys`, `os` imported but unused in test files | Auto-fixed by ruff |
-| `mypy misc` (subclassing Any) | Service packages (pydantic-settings, sqlalchemy) not in root `.venv` — mypy can't find types | Excluded `api/` and `tests/` from root mypy config; each service runs mypy independently in CI |
-| `mypy unused-ignore` | Placed `# type: ignore[type-arg]` on `lifespan` which needed `[no-untyped-def]` | Fixed annotation: `async def lifespan(app: FastAPI)` with proper ignore comment |
+| `mypy misc` (subclassing Any) | Service packages (pydantic-settings, sqlalchemy) not in root `.venv` — mypy can't find types | Excluded `api/` and `tests/` from root mypy; each service runs mypy independently in CI |
+| `mypy unused-ignore` on `lifespan` | `# type: ignore[type-arg]` was wrong code — real error was `no-untyped-def` (missing return type) | Added `-> AsyncGenerator[None, None]` return type annotation; removed wrong ignore |
+| `mypy unused-ignore` on `get_db`/`get_redis` in `dependencies.py` | `# type: ignore[return]` is not needed — raising an exception satisfies `-> None` | Removed the `# type: ignore` comments |
+| `mypy` not excluding `api/` and `tests/` | Pre-commit mypy hook excluded `chatbot/modelserver/widget/host/` but not `api/` or `tests/` | Added `api` and `tests` to the mypy `exclude` regex in `.pre-commit-config.yaml` |
+
+### Phase 1-T unit test failures
+
+| Error | Root Cause | Fix |
+|-------|-----------|-----|
+| `ModuleNotFoundError: No module named 'hvac'` | `hvac` only in `api/requirements.txt`, not in root dev deps — `pytest` runs in root `.venv` | Added `hvac>=2.3.0` to `[dependency-groups] dev` in `pyproject.toml` |
+| `ModuleNotFoundError: No module named 'config'` | `api/main.py` does `from config import get_settings` (bare import). `api/` was not on `sys.path` | Added `pythonpath = ["api"]` to `[tool.pytest.ini_options]` |
+| `ModuleNotFoundError: No module named 'fastapi'` | Same root cause — `fastapi` only in `api/requirements.txt` | Added `fastapi>=0.115.0` to root dev deps |
+| `ModuleNotFoundError: No module named 'pydantic_settings'` | Same root cause | Added `pydantic-settings>=2.0` to root dev deps |
+| `ModuleNotFoundError: No module named 'yaml'` | `pyyaml` only in `api/requirements.txt` | Added `pyyaml>=6.0` to root dev deps |
+| Integration tests: 2 skipped (not 7 collected) | `pytest.importorskip("redis", ...)` skipped because `redis` package not in root dev deps | Added `redis>=5.0`, `psycopg2-binary>=2.9`, `sqlalchemy[asyncio]>=2.0`, `alembic>=1.13.0` to root dev deps |
+
+### Phase 1-T docker-compose failures
+
+| Error | Root Cause | Fix |
+|-------|-----------|-----|
+| `Bind for 0.0.0.0:5432 failed: port is already allocated` | Local PostgreSQL installation already using port 5432 on the host | Changed `POSTGRES_PORT=5432` → `POSTGRES_PORT=5433` in `.env` (host-side port only; internal Docker network still uses 5432) |
+| Migration fails: `sqlalchemy.exc.ArgumentError: 'SchemaItem' object expected, got <class 'type'>` | `sa.Column.__class__.__mro__[0]` evaluates to Python's built-in `type` class, not a SQLAlchemy type. SQLAlchemy's `create_table()` passes column arguments through `_init_items()` which expects a `SchemaItem`, not the `type` metaclass | Replaced the broken placeholder with `sa.Text, nullable=True` — the column is dropped immediately after `create_table` and re-added as `vector(1536)` via raw SQL, so the placeholder type is irrelevant |
+| `docker.errors.DockerException: Error while fetching server API version` | Docker Desktop was not running (engine stopped after laptop was left overnight) | Restarted Docker Desktop; waited for "Engine running" status in the bottom-left status bar |
+
+### The migration bug in detail
+
+**Broken code (original):**
+```python
+sa.Column(
+    "embedding",
+    sa.Column.__class__.__mro__[0],  # placeholder — see raw SQL below
+),
+```
+
+`sa.Column.__class__` is `type` (the metaclass of all Python classes).
+`type.__mro__[0]` is also `type`. So this passes the `type` built-in as
+the SQLAlchemy column type argument, which SQLAlchemy rejects.
+
+**Fixed code:**
+```python
+sa.Column("embedding", sa.Text, nullable=True),  # dropped and re-added via raw SQL below
+```
+
+`sa.Text` is a valid SQLAlchemy type. The column is dropped on the next line:
+```python
+op.drop_column("memories", "embedding")
+op.execute(f"ALTER TABLE memories ADD COLUMN embedding vector({EMBEDDING_DIM}) NOT NULL")
+```
+So the placeholder type (`Text`) never exists in the final schema.
 
 ---
 
@@ -544,6 +593,15 @@ would require custom images.
 
 ## Acceptance Criteria (Phase 1-T)
 
+### Unit tests (no Docker required)
+- [x] `pytest tests/test_phase1_boot_guard.py -v` → **5 passed**
+  - `test_vault_fetch_succeeds_when_authenticated` ✅
+  - `test_vault_fetch_raises_when_unauthenticated` ✅
+  - `test_eval_thresholds_passes_when_valid` ✅
+  - `test_eval_thresholds_raises_when_zero` ✅
+  - `test_eval_thresholds_raises_when_file_missing` ✅
+
+### Full stack (requires Docker Desktop running)
 - [ ] `docker-compose up --wait` exits 0 — all health checks pass
 - [ ] Vault responds: `vault status | grep "Initialized.*true"`
 - [ ] All 5 secrets readable from Vault after vault-init
@@ -557,5 +615,13 @@ would require custom images.
 - [ ] `GET http://localhost:8000/health` → `{"status":"ok","version":"0.1.0"}`
 - [ ] Boot guard: stopping Vault and restarting `api` → container exits non-zero
 - [ ] Boot guard: `eval_thresholds.yaml` with `faithfulness: 0` → container exits non-zero
-- [ ] Unit tests: `pytest tests/test_phase1_boot_guard.py` → 5 passed
-- [ ] Integration tests (requires Docker): `pytest tests/test_phase1_db.py tests/test_phase1_redis.py`
+
+### Integration tests (requires Docker Desktop running)
+- [ ] `pytest tests/test_phase1_db.py tests/test_phase1_redis.py -v` → 7 passed
+  - `test_all_tables_created` — all 7 tables exist after migration
+  - `test_indexes_exist` — HNSW + GIN indexes present
+  - `test_tsvector_trigger_exists` — trigger fires on chunks insert
+  - `test_redis_ping` — Redis responds to PING
+  - `test_conversation_ttl` — DB 0 keys expire after TTL
+  - `test_cache_ttl` — DB 1 keys expire after TTL
+  - `test_two_logical_dbs_are_isolated` — DB 0 and DB 1 are isolated

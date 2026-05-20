@@ -1,6 +1,17 @@
-# Phase 1: minimal stub
 fastapi>=0.111.0
 uvicorn[standard]>=0.30.0
 pydantic>=2.7.0
+httpx>=0.27.0
+pyyaml>=6.0.0
+numpy>=1.26.0
+minio>=7.2.0
+hvac>=2.2.0
 
-# Phase 7 adds: transformers, torch, spacy, sentence-transformers
+# ML — Phase 7 (stubs now, real models loaded after training)
+# torch installed CPU-only via Dockerfile (see --index-url)
+torch>=2.0.0
+transformers>=4.40.0
+sentence-transformers>=3.0.0
+scikit-learn>=1.5.0
+pandas>=2.2.0
+spacy>=3.7.0

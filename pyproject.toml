@@ -26,6 +26,15 @@ dev = [
     "factory-boy>=3.3.0",
     "testcontainers>=4.5.0",
     "httpx>=0.27.0",
+    # API packages needed to run root-level tests against api/ code
+    "hvac>=2.3.0",
+    "pyyaml>=6.0",
+    "pydantic-settings>=2.0",
+    "fastapi>=0.115.0",
+    "sqlalchemy[asyncio]>=2.0",
+    "alembic>=1.13.0",
+    "psycopg2-binary>=2.9",
+    "redis>=5.0",
 ]
 
 [tool.ruff]
@@ -61,3 +70,4 @@ exclude = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+pythonpath = ["api"]
