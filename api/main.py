@@ -19,6 +19,7 @@ import httpx
 import yaml
 from config import get_settings
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from langfuse import Langfuse
 
@@ -27,6 +28,7 @@ from app.api.routes.chat import router as chat_router
 from app.api.routes.conversations import router as conversations_router
 from app.api.routes.health import router as health_router
 from app.api.routes.rag import router as rag_router
+from app.api.routes.widgets import router as widgets_router
 from app.exceptions import AppError
 from app.infra.db.session import build_session_factory
 from app.infra.minio_client import build_minio
@@ -109,6 +111,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(title="Maintainer's AI Copilot", version="0.1.0", lifespan=lifespan)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # ── Exception handlers ─────────────────────────────────────────────────────
 
@@ -144,3 +154,4 @@ app.include_router(auth_router)
 app.include_router(conversations_router)
 app.include_router(rag_router)
 app.include_router(chat_router)
+app.include_router(widgets_router)

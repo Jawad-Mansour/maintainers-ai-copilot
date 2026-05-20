@@ -23,8 +23,9 @@ Last updated: 2026-05-20
 | 3-T | Phase 3 tests | ✅ Done | 20/20 passing — chunker, rag_service, routes |
 | 4 | Chatbot pipeline + Memory | ✅ Done | Chat service, Redis history, semantic memory, Langfuse tracing, prompts/ dir |
 | 4-T | Phase 4 bug fixes + tests | ✅ Done | 16/16 passing — chat_service, memory, routes; 87 total tests green |
-| 5 | Widget backend + Streamlit + React | ⏳ Pending | |
-| 5-T | Phase 5 tests | ⏳ Pending | |
+| 5 | Widget backend + tool-calling (non-UI) | ✅ Done | Tool-calling loop, widget CRUD, SSE stream, CORS |
+| 5-UI | Streamlit + React + host demo | ⏳ Pending | 5-C, 5-D, 5-E |
+| 5-T | Phase 5 non-UI tests | ✅ Done | 19 new tests, 106 total passing |
 | 6 | Evals + CI | ⏳ Pending | |
 | 6-T | Phase 6 tests | ⏳ Pending | |
 | 7 | ML/DL (training + real modelserver) | ⏳ Pending | Blocked on Colab training run |
@@ -141,7 +142,7 @@ Last updated: 2026-05-20
 7. Added audit log to every memory write
 8. Added graceful tool failure recovery (classify + RAG)
 
-**All 87 tests passing (confirmed 2026-05-20):**
+**All 106 tests passing (confirmed 2026-05-20 after Phase 5):**
 - test_phase1_db.py (3 tests — testcontainers)
 - test_phase2_auth.py (7), test_phase2_crud.py (7), test_phase2_crud_routes.py (6)
 - test_phase2_redaction.py (9), test_phase2_exceptions.py (10)
@@ -150,7 +151,7 @@ Last updated: 2026-05-20
 
 ---
 
-### ⏳ Phase 5 — Widget backend + Streamlit + React
+### ✅ Phase 5 (Non-UI) — Tool-calling agent + Widget backend
 
 **5-A: Tool-calling LLM refactor (biggest change)**
 - Define 5 OpenAI tool schemas in api/app/tools/:

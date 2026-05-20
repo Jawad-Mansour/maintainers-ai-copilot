@@ -49,6 +49,7 @@ def _mock_langfuse() -> MagicMock:
 def _mock_openai_response(text: str = "Use None check before calling method.") -> MagicMock:
     choice = MagicMock()
     choice.message.content = text
+    choice.message.tool_calls = None  # no tool calls — LLM goes straight to final answer
     resp = MagicMock()
     resp.choices = [choice]
     return resp
@@ -121,12 +122,10 @@ async def test_chat_does_not_auto_save_memory() -> None:
 
     with (
         patch("api.app.services.chat_service.conversation_repo.get", return_value=conv),
-        patch("api.app.services.chat_service.modelserver_client", create=True),
         patch(
             "api.app.services.chat_service.memory_service.get_relevant_memories",
             return_value=[],
         ),
-        patch("api.app.services.chat_service.rag_search", return_value=[]),
         patch(
             "api.app.services.chat_service.message_repo.list_by_conversation",
             return_value=[],
@@ -143,7 +142,7 @@ async def test_chat_does_not_auto_save_memory() -> None:
         ),
         patch(
             "api.app.services.chat_service.load_prompt",
-            return_value="system {label} {memories} {chunks}",
+            return_value="{memories}",
         ),
     ):
         await chat(
@@ -179,7 +178,6 @@ async def test_chat_serves_history_from_redis_cache() -> None:
             "api.app.services.chat_service.memory_service.get_relevant_memories",
             return_value=[],
         ),
-        patch("api.app.services.chat_service.rag_search", return_value=[]),
         patch("api.app.services.chat_service.message_repo.create"),
         patch("api.app.services.chat_service.message_repo.list_by_conversation") as mock_list,
         patch(
@@ -192,7 +190,7 @@ async def test_chat_serves_history_from_redis_cache() -> None:
         ),
         patch(
             "api.app.services.chat_service.load_prompt",
-            return_value="{label} {memories} {chunks}",
+            return_value="{memories}",
         ),
     ):
         await chat(
@@ -225,7 +223,6 @@ async def test_chat_updates_redis_after_reply() -> None:
             "api.app.services.chat_service.memory_service.get_relevant_memories",
             return_value=[],
         ),
-        patch("api.app.services.chat_service.rag_search", return_value=[]),
         patch(
             "api.app.services.chat_service.message_repo.list_by_conversation",
             return_value=[],
@@ -243,7 +240,7 @@ async def test_chat_updates_redis_after_reply() -> None:
         ),
         patch(
             "api.app.services.chat_service.load_prompt",
-            return_value="{label} {memories} {chunks}",
+            return_value="{memories}",
         ),
     ):
         await chat(
@@ -278,7 +275,7 @@ async def test_chat_returns_correct_response_shape() -> None:
     redis.get.return_value = None
     conv = _mock_conv()
 
-    chunk = ChunkResult(
+    ChunkResult(
         id=uuid.uuid4(),
         text="relevant chunk",
         parent_text=None,
@@ -293,7 +290,6 @@ async def test_chat_returns_correct_response_shape() -> None:
             "api.app.services.chat_service.memory_service.get_relevant_memories",
             return_value=[],
         ),
-        patch("api.app.services.chat_service.rag_search", return_value=[chunk]),
         patch(
             "api.app.services.chat_service.message_repo.list_by_conversation",
             return_value=[],
@@ -311,7 +307,7 @@ async def test_chat_returns_correct_response_shape() -> None:
         ),
         patch(
             "api.app.services.chat_service.load_prompt",
-            return_value="{label} {memories} {chunks}",
+            return_value="{memories}",
         ),
     ):
         result = await chat(
@@ -326,5 +322,6 @@ async def test_chat_returns_correct_response_shape() -> None:
         )
 
     assert result.reply == "Fix it."
-    assert result.label == "bug"
-    assert "gh://x/y#1" in result.sources
+    # label defaults to "unknown" when the LLM does not invoke the classify_issue tool
+    assert result.label == "unknown"
+    assert isinstance(result.sources, list)

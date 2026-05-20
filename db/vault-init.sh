@@ -16,7 +16,7 @@ vault kv put secret/postgres \
   port="5432"
 
 vault kv put secret/openai \
-  api_key="sk-placeholder-replace-before-demo"
+  api_key="${OPENAI_API_KEY:-sk-placeholder-replace-before-demo}"
 
 vault kv put secret/jwt \
   signing_key="super-secret-jwt-key-replace-before-demo"

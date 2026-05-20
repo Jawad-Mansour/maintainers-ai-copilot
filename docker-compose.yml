@@ -96,6 +96,7 @@ services:
     environment:
       VAULT_ADDR: ${VAULT_ADDR:-http://vault:8200}
       VAULT_TOKEN: ${VAULT_TOKEN:-root}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-placeholder-replace-before-demo}
     volumes:
       - ./db/vault-init.sh:/vault-init.sh:ro
     command: sh /vault-init.sh

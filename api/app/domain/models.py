@@ -103,3 +103,36 @@ class ChatResponse(BaseModel):
     reply: str
     label: str
     sources: list[str]
+
+
+# ── Widget schemas ─────────────────────────────────────────────────────────
+
+
+class WidgetCreate(BaseModel):
+    name: str
+    allowed_origins: list[str] = []
+    theme: dict | None = None
+    greeting: str = "How can I help?"
+    enabled_tools: list[str] = []
+
+
+class WidgetUpdate(BaseModel):
+    name: str | None = None
+    allowed_origins: list[str] | None = None
+    theme: dict | None = None
+    greeting: str | None = None
+    enabled_tools: list[str] | None = None
+    is_active: bool | None = None
+
+
+class WidgetOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    owner_id: UUID
+    name: str
+    allowed_origins: list[str]
+    theme: dict | None
+    greeting: str
+    enabled_tools: list[str]
+    is_active: bool
+    created_at: datetime
