@@ -14,6 +14,7 @@ from minio import Minio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import ChunkResult, IngestRequest, IngestResponse, SearchRequest, UserOut
+from app.infra.modelserver_client import ModelServerClient
 from app.infra.vault import VaultSecrets
 from app.services import rag_service
 
@@ -29,7 +30,12 @@ def _get_minio(request: Request) -> Minio:
     return request.app.state.minio_client  # type: ignore[no-any-return]
 
 
+def _get_modelserver(request: Request) -> ModelServerClient:
+    return request.app.state.modelserver_client  # type: ignore[no-any-return]
+
+
 MinioDep = Annotated[Minio, Depends(_get_minio)]
+ModelServerDep = Annotated[ModelServerClient, Depends(_get_modelserver)]
 
 
 @router.post("/ingest", response_model=IngestResponse, status_code=201)
@@ -48,6 +54,7 @@ async def search(
     db: DbDep,
     secrets: SecretsDep,
     minio: MinioDep,
+    modelserver: ModelServerDep,
     _user: CurrentUserDep,
 ) -> list[ChunkResult]:
-    return await rag_service.search(db, req, secrets.openai_api_key, minio)
+    return await rag_service.search(db, req, secrets.openai_api_key, minio, modelserver)

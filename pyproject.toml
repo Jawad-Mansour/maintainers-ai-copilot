@@ -3,7 +3,7 @@ name = "maintainers-ai-copilot"
 version = "0.1.0"
 description = "Authenticated AI chatbot for open-source maintainers to triage GitHub issues"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = []
 
 [build-system]
@@ -35,6 +35,23 @@ dev = [
     "alembic>=1.13.0",
     "psycopg2-binary>=2.9",
     "redis>=5.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "asyncpg>=0.29.0",
+    "pgvector>=0.3.0",
+    "minio>=7.2.0",
+    "openai>=1.30.0",
+    "tiktoken>=0.7.0",
+    "structlog>=24.2.0",
+    "tenacity>=8.3.0",
+    "langfuse>=2.40.0",
+    "numpy>=1.26.0",
+    "python-multipart>=0.0.9",
+    "beautifulsoup4>=4.12.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.7.0",
+    "email-validator>=2.0",
+    "bcrypt<4.0",
 ]
 
 [tool.ruff]

@@ -42,10 +42,10 @@ def _run_migrations(db_url: str) -> None:
     from alembic import command
     from alembic.config import Config
 
-    # Point alembic at the api/ directory
     alembic_cfg = Config("api/alembic.ini")
+    # script_location in alembic.ini is relative; resolve to actual path from project root
+    alembic_cfg.set_main_option("script_location", "api/alembic")
     alembic_cfg.set_main_option("sqlalchemy.url", db_url)
-    # Override version locations to use db/migrations/
     alembic_cfg.set_main_option("version_locations", "db/migrations")
     command.upgrade(alembic_cfg, "head")
 

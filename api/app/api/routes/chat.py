@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from dependencies import get_current_user, get_db, get_secrets
+import redis.asyncio as aioredis
+from dependencies import get_current_user, get_db, get_redis, get_secrets
 from fastapi import APIRouter, Depends, Request
 from langfuse import Langfuse
 from minio import Minio
@@ -24,6 +25,7 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 DbDep = Annotated[AsyncSession, Depends(get_db)]
 SecretsDep = Annotated[VaultSecrets, Depends(get_secrets)]
 CurrentUserDep = Annotated[UserOut, Depends(get_current_user)]
+RedisDep = Annotated[aioredis.Redis, Depends(get_redis)]
 
 
 def _get_minio(request: Request) -> Minio:
@@ -48,6 +50,7 @@ async def chat(
     req: ChatRequest,
     db: DbDep,
     secrets: SecretsDep,
+    redis: RedisDep,
     minio: MinioDep,
     modelserver: ModelServerDep,
     lf: LangfuseDep,
@@ -61,4 +64,5 @@ async def chat(
         minio_client=minio,
         modelserver_client=modelserver,
         langfuse=lf,
+        redis=redis,
     )

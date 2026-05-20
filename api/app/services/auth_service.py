@@ -16,7 +16,9 @@ from app.exceptions import AuthenticationError, ConflictError
 from app.infra.jwt_handler import create_access_token
 from app.repositories import user_repo
 
-_pwd: CryptContext = CryptContext(schemes=["bcrypt"], deprecated="auto")
+_pwd: CryptContext = CryptContext(
+    schemes=["bcrypt"], deprecated="auto", bcrypt__truncate_error=False
+)
 
 
 async def register(db: AsyncSession, req: RegisterRequest, signing_key: str) -> LoginResponse:

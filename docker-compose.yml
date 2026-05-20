@@ -159,6 +159,8 @@ services:
       DB_HOST: db
       REDIS_HOST: redis
       MINIO_HOST: minio
+    volumes:
+      - ./eval_thresholds.yaml:/eval_thresholds.yaml:ro
     ports:
       - "${API_PORT:-8000}:8000"
     networks:

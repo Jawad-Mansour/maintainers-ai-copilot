@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+import httpx
 import yaml
 from config import get_settings
 from fastapi import FastAPI, Request
@@ -73,6 +74,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         secrets: VaultSecrets = fetch_vault_secrets(settings.vault_addr, settings.vault_token)
     except RuntimeError as exc:
         print(f"[BOOT FAILURE] {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        async with httpx.AsyncClient(timeout=5) as hc:
+            resp = await hc.get(f"http://{settings.modelserver_host}:8001/health")
+            resp.raise_for_status()
+    except Exception as exc:
+        print(f"[BOOT FAILURE] modelserver unreachable: {exc}", file=sys.stderr)
         sys.exit(1)
     # ──────────────────────────────────────────────────────────────────
 

@@ -7,7 +7,7 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.openai_client import embed_one
-from app.repositories import memory_repo
+from app.repositories import audit_repo, memory_repo
 
 
 async def get_relevant_memories(
@@ -29,6 +29,15 @@ async def save_memory(
     summary: str,
     api_key: str,
 ) -> None:
-    """Embed summary and add a memory row. Caller owns db.commit()."""
+    """Embed summary and add a memory row. Caller owns db.commit().
+
+    Every long-term write produces an audit-log row per assignment requirement.
+    """
     embedding = await embed_one(summary, api_key)
-    await memory_repo.create(db, user_id, summary, embedding)
+    memory = await memory_repo.create(db, user_id, summary, embedding)
+    await audit_repo.log(
+        db,
+        actor_id=user_id,
+        action="write_memory",
+        target_id=memory.id,
+    )

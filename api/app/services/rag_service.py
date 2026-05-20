@@ -6,18 +6,16 @@ from minio import Minio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import ChunkResult, IngestRequest, IngestResponse, SearchRequest
+from app.exceptions import ToolFailure
 from app.infra.minio_client import save_chunk_snapshot
+from app.infra.modelserver_client import ModelServerClient
 from app.infra.observability import get_logger
 from app.infra.openai_client import embed_one, embed_texts
+from app.infra.prompts import load_prompt
 from app.repositories import chunk_repo
 from app.services.chunker import make_chunks
 
 logger = get_logger(__name__)
-
-_HYDE_PROMPT = (
-    "Write a short GitHub issue comment that would directly answer this question:\n"
-    "{query}\n\nAnswer:"
-)
 
 
 async def ingest(db: AsyncSession, req: IngestRequest, api_key: str) -> IngestResponse:
@@ -38,13 +36,18 @@ async def search(
     req: SearchRequest,
     api_key: str,
     minio_client: Minio,
+    modelserver_client: ModelServerClient,
 ) -> list[ChunkResult]:
     # HyDE: blend original query embedding 50/50 with hypothetical answer embedding
-    query_vec = await embed_one(req.query, api_key)
-    hyp_text = await _hypothetical_answer(req.query, api_key)
-    hyp_vec = await embed_one(hyp_text, api_key)
+    try:
+        query_vec = await embed_one(req.query, api_key)
+        hyp_text = await _hypothetical_answer(req.query, api_key)
+        hyp_vec = await embed_one(hyp_text, api_key)
+    except Exception as exc:
+        raise ToolFailure(f"embedding failed: {exc}") from exc
     combined_vec = [(q + h) / 2.0 for q, h in zip(query_vec, hyp_vec, strict=True)]
 
+    # Fetch top-20 candidates for cross-encoder reranking
     rows = await chunk_repo.hybrid_search(
         db,
         query_vec=combined_vec,
@@ -52,7 +55,7 @@ async def search(
         label=req.label,
         source=req.source,
         top_k=20,
-        final_k=req.top_k,
+        final_k=20,
     )
 
     results: list[ChunkResult] = []
@@ -71,6 +74,13 @@ async def search(
             )
         )
 
+    # Cross-encoder reranking: top-20 → top-k
+    if results:
+        scores = await modelserver_client.rerank(req.query, [r.text for r in results])
+        paired = sorted(zip(results, scores, strict=True), key=lambda x: x[1], reverse=True)
+        results = [r for r, _ in paired]
+    results = results[: req.top_k]
+
     await save_chunk_snapshot(
         minio_client,
         str(req.conversation_id),
@@ -87,7 +97,7 @@ async def _hypothetical_answer(query: str, api_key: str) -> str:
     try:
         resp = await client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "user", "content": _HYDE_PROMPT.format(query=query)}],
+            messages=[{"role": "user", "content": load_prompt("hyde").format(query=query)}],
             max_tokens=150,
             temperature=0.7,
         )
