@@ -89,3 +89,17 @@ class ChunkResult(BaseModel):
     label: str | None
     source: str | None
     score: float
+
+
+# ── Chat schemas ───────────────────────────────────────────────────────────
+
+
+class ChatRequest(BaseModel):
+    message: str
+    conversation_id: UUID
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    label: str
+    sources: list[str]

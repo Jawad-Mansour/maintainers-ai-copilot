@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     db_host: str = "db"
     redis_host: str = "redis"
     minio_host: str = "minio"
+    modelserver_host: str = "modelserver"
 
 
 _settings: Settings | None = None

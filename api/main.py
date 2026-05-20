@@ -19,14 +19,17 @@ import yaml
 from config import get_settings
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from langfuse import Langfuse
 
 from app.api.routes.auth import router as auth_router
+from app.api.routes.chat import router as chat_router
 from app.api.routes.conversations import router as conversations_router
 from app.api.routes.health import router as health_router
 from app.api.routes.rag import router as rag_router
 from app.exceptions import AppError
 from app.infra.db.session import build_session_factory
 from app.infra.minio_client import build_minio
+from app.infra.modelserver_client import ModelServerClient
 from app.infra.observability import configure_logging, get_logger
 from app.infra.redis_client import build_redis
 from app.infra.vault import VaultSecrets, fetch_vault_secrets
@@ -82,9 +85,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         secrets.minio_access_key,
         secrets.minio_secret_key,
     )
+    app.state.modelserver_client = ModelServerClient(f"http://{settings.modelserver_host}:8001")
+    app.state.langfuse = Langfuse(
+        public_key=secrets.langfuse_public_key,
+        secret_key=secrets.langfuse_secret_key,
+        host=secrets.langfuse_host,
+    )
 
     yield
 
+    app.state.langfuse.flush()
     await app.state.redis_client.aclose()
 
 
@@ -124,3 +134,4 @@ app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(conversations_router)
 app.include_router(rag_router)
+app.include_router(chat_router)
