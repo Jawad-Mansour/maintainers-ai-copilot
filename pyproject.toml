@@ -43,8 +43,20 @@ known-first-party = ["app"]
 strict = true
 ignore_missing_imports = true
 python_version = "3.12"
-# Root mypy covers api/ only. Each other service runs mypy independently in CI.
-exclude = ["notebooks/", ".specify/", ".claude/", "chatbot/", "modelserver/", "widget/", "host/"]
+# Root mypy only covers root-level config files.
+# Each service (api/, chatbot/, modelserver/) and tests/ run mypy independently
+# in their own CI step where service packages are installed.
+exclude = [
+    "api/",
+    "tests/",
+    "notebooks/",
+    ".specify/",
+    ".claude/",
+    "chatbot/",
+    "modelserver/",
+    "widget/",
+    "host/",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -1,0 +1,19 @@
+# Evaluation thresholds — all values must be > 0.
+# CI hard-fails if any metric falls below these values.
+# Updated after each training run with actual measured results.
+
+ragas:
+  faithfulness: 0.70
+  answer_relevancy: 0.70
+  context_precision: 0.65
+
+retrieval:
+  hit_at_5: 0.70
+  mrr_at_10: 0.50
+
+classifier:
+  f1_macro: 0.75
+  # Filled after Phase 7 training:
+  # classical_f1: 0.0   # TF-IDF + LR
+  # dl_f1: 0.0          # DistilBERT
+  # llm_f1: 0.0         # GPT-4o-mini zero-shot

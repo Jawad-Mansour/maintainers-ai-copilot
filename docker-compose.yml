@@ -1,0 +1,219 @@
+networks:
+  copilot-net:
+    driver: bridge
+
+volumes:
+  db-data:
+  vault-data:
+  minio-data:
+
+services:
+  # ─────────────────────────────────────────────
+  # Data stores
+  # ─────────────────────────────────────────────
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: copilot
+      # Dev-only fixed password. Vault stores the same value.
+      # The app NEVER reads this directly — it always fetches from Vault.
+      POSTGRES_PASSWORD: copilot_dev
+      POSTGRES_DB: copilot_db
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks:
+      - copilot-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U copilot -d copilot_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save "" --appendonly no
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    networks:
+      - copilot-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      # Dev-only credentials. Vault stores the same values.
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin_dev
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+    networks:
+      - copilot-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ─────────────────────────────────────────────
+  # Secrets (Vault)
+  # ─────────────────────────────────────────────
+  vault:
+    image: hashicorp/vault:1.17
+    command: vault server -dev -dev-root-token-id=root -dev-listen-address=0.0.0.0:8200
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: root
+      VAULT_ADDR: http://0.0.0.0:8200
+    cap_add:
+      - IPC_LOCK
+    ports:
+      - "8200:8200"
+    volumes:
+      - vault-data:/vault/data
+    networks:
+      - copilot-net
+    healthcheck:
+      test: ["CMD", "sh", "-c", "VAULT_ADDR=http://127.0.0.1:8200 vault status | grep -q 'Initialized'"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # One-shot: writes all secrets into Vault after it is healthy
+  vault-init:
+    image: hashicorp/vault:1.17
+    depends_on:
+      vault:
+        condition: service_healthy
+    environment:
+      VAULT_ADDR: ${VAULT_ADDR:-http://vault:8200}
+      VAULT_TOKEN: ${VAULT_TOKEN:-root}
+    volumes:
+      - ./db/vault-init.sh:/vault-init.sh:ro
+    command: sh /vault-init.sh
+    networks:
+      - copilot-net
+    restart: "no"
+
+  # One-shot: creates MinIO buckets after MinIO is healthy
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    volumes:
+      - ./db/minio-init.sh:/minio-init.sh:ro
+    entrypoint: sh /minio-init.sh
+    networks:
+      - copilot-net
+    restart: "no"
+
+  # ─────────────────────────────────────────────
+  # DB migrations (runs alembic upgrade head, then exits 0)
+  # ─────────────────────────────────────────────
+  migrate:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    command: alembic upgrade head
+    depends_on:
+      db:
+        condition: service_healthy
+      vault-init:
+        condition: service_completed_successfully
+    environment:
+      VAULT_ADDR: ${VAULT_ADDR:-http://vault:8200}
+      VAULT_TOKEN: ${VAULT_TOKEN:-root}
+      DB_HOST: db
+    volumes:
+      - ./db/migrations:/app/alembic/versions
+    networks:
+      - copilot-net
+    restart: "no"
+
+  # ─────────────────────────────────────────────
+  # Application services
+  # ─────────────────────────────────────────────
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      VAULT_ADDR: ${VAULT_ADDR:-http://vault:8200}
+      VAULT_TOKEN: ${VAULT_TOKEN:-root}
+      DB_HOST: db
+      REDIS_HOST: redis
+      MINIO_HOST: minio
+    ports:
+      - "${API_PORT:-8000}:8000"
+    networks:
+      - copilot-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  modelserver:
+    build:
+      context: ./modelserver
+      dockerfile: Dockerfile
+    environment:
+      VAULT_ADDR: ${VAULT_ADDR:-http://vault:8200}
+      VAULT_TOKEN: ${VAULT_TOKEN:-root}
+    ports:
+      - "${MODELSERVER_PORT:-8001}:8001"
+    networks:
+      - copilot-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  chatbot:
+    build:
+      context: ./chatbot
+      dockerfile: Dockerfile
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      API_URL: http://api:8000
+    ports:
+      - "${CHATBOT_PORT:-8501}:8501"
+    networks:
+      - copilot-net
+
+  widget:
+    build:
+      context: ./widget
+      dockerfile: Dockerfile
+    ports:
+      - "${WIDGET_PORT:-5173}:80"
+    networks:
+      - copilot-net
+
+  host:
+    build:
+      context: ./host
+      dockerfile: Dockerfile
+    ports:
+      - "3001:80"
+    networks:
+      - copilot-net
