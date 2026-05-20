@@ -23,8 +23,10 @@ from fastapi.responses import JSONResponse
 from app.api.routes.auth import router as auth_router
 from app.api.routes.conversations import router as conversations_router
 from app.api.routes.health import router as health_router
+from app.api.routes.rag import router as rag_router
 from app.exceptions import AppError
 from app.infra.db.session import build_session_factory
+from app.infra.minio_client import build_minio
 from app.infra.observability import configure_logging, get_logger
 from app.infra.redis_client import build_redis
 from app.infra.vault import VaultSecrets, fetch_vault_secrets
@@ -75,6 +77,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.settings = settings
     app.state.session_factory = build_session_factory(secrets.db_url)
     app.state.redis_client = build_redis(settings.redis_host)
+    app.state.minio_client = build_minio(
+        secrets.minio_endpoint,
+        secrets.minio_access_key,
+        secrets.minio_secret_key,
+    )
 
     yield
 
@@ -116,3 +123,4 @@ async def unhandled_error_handler(request: Request, exc: Exception) -> JSONRespo
 app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(conversations_router)
+app.include_router(rag_router)

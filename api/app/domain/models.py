@@ -58,3 +58,34 @@ class LoginResponse(BaseModel):
 
 class MessageCreate(BaseModel):
     content: str
+
+
+# ── RAG schemas ────────────────────────────────────────────────────────────
+
+
+class IngestRequest(BaseModel):
+    text: str
+    source: str
+    label: str | None = None
+
+
+class IngestResponse(BaseModel):
+    chunks_stored: int
+
+
+class SearchRequest(BaseModel):
+    query: str
+    conversation_id: UUID
+    label: str | None = None
+    source: str | None = None
+    top_k: int = 5
+
+
+class ChunkResult(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    text: str
+    parent_text: str | None
+    label: str | None
+    source: str | None
+    score: float
