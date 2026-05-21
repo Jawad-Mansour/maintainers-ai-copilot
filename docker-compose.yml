@@ -154,12 +154,16 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
+      modelserver:
+        condition: service_healthy
     environment:
       VAULT_ADDR: ${VAULT_ADDR:-http://vault:8200}
       VAULT_TOKEN: ${VAULT_TOKEN:-root}
       DB_HOST: db
       REDIS_HOST: redis
       MINIO_HOST: minio
+      CORS_ORIGINS: "http://localhost:8501,http://localhost:5173,http://localhost:3001,http://localhost:3000"
+      WIDGET_BASE_URL: "http://localhost:5173"
     volumes:
       - ./eval_thresholds.yaml:/eval_thresholds.yaml:ro
     ports:
@@ -176,6 +180,11 @@ services:
     build:
       context: ./modelserver
       dockerfile: Dockerfile
+    depends_on:
+      vault-init:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
     environment:
       VAULT_ADDR: ${VAULT_ADDR:-http://vault:8200}
       VAULT_TOKEN: ${VAULT_TOKEN:-root}

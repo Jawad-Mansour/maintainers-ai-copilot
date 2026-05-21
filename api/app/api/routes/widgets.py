@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import uuid
 from typing import Annotated
 
@@ -36,6 +37,9 @@ async def list_widgets(
     return await widget_service.list_widgets(db)
 
 
+_WIDGET_BASE_URL = os.environ.get("WIDGET_BASE_URL", "http://localhost:5173")
+
+
 @router.get("/widget.js")
 async def widget_loader_script(
     widget_id: Annotated[uuid.UUID, Query(description="Widget ID to embed")],
@@ -44,7 +48,7 @@ async def widget_loader_script(
     js = f"""(function() {{
   var widgetId = "{widget_id}";
   var iframe = document.createElement("iframe");
-  iframe.src = "/chat-widget?widget_id=" + widgetId;
+  iframe.src = "{_WIDGET_BASE_URL}/?widget_id=" + widgetId;
   iframe.style.cssText = [
     "position:fixed", "bottom:20px", "right:20px",
     "width:400px", "height:600px", "border:none",

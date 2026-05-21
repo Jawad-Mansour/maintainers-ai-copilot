@@ -6,8 +6,9 @@ pyyaml>=6.0.0
 numpy>=1.26.0
 minio>=7.2.0
 hvac>=2.2.0
+openai>=1.30.0
 
-# ML — Phase 7 (stubs now, real models loaded after training)
+# ML — Phase 7: real models loaded after training
 # torch installed CPU-only via Dockerfile (see --index-url)
 torch>=2.0.0
 transformers>=4.40.0

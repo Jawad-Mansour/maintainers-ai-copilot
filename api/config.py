@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     minio_host: str = "minio"
     modelserver_host: str = "modelserver"
 
+    # Phase 7-C: set to True after uploading trained weights to MinIO
+    require_real_modelserver: bool = False
+
 
 _settings: Settings | None = None
 

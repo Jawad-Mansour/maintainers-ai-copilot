@@ -28,8 +28,8 @@ Last updated: 2026-05-20
 | 5-T | Phase 5 non-UI tests | ✅ Done | 19 new tests, 106 total passing |
 | 6 | Evals + CI | ⏳ Pending | |
 | 6-T | Phase 6 tests | ⏳ Pending | |
-| 7 | ML/DL (training + real modelserver) | ⏳ Pending | Blocked on Colab training run |
-| 7-T | Phase 7 integration | ⏳ Pending | |
+| 7 | ML/DL (training + real modelserver) | ✅ Done | 7-A training complete; artifacts in MinIO; modelserver boots in real mode |
+| 7-T | Phase 7 tests | ✅ Done | 13/13 passing; modelserver confirmed mode=real |
 | 8 | Docs + polish + tag | ⏳ Pending | |
 
 ---
@@ -214,9 +214,9 @@ Last updated: 2026-05-20
 
 ---
 
-### ⏳ Phase 7 — ML/DL (blocked on Colab training)
+### ✅ Phase 7 — ML/DL
 
-**7-A: Training notebook (I write, YOU run on Colab T4)**
+**7-A: Training notebook (written, YOU run on Colab T4)**
 - notebooks/train_classifier.ipynb
 - Fetch pandas-dev/pandas closed issues via GitHub API
 - 7-step preprocessing pipeline
@@ -228,18 +228,21 @@ Last updated: 2026-05-20
 - Save weights to MinIO with model card (SHA-256 of training data + weights)
 - YOU: copy actual metrics into DECISIONS.md D-deploy section
 
-**7-B: Real modelserver**
-- classifier.py — load DistilBERT weights from MinIO, run inference
-- reranker.py — ms-marco-MiniLM-L-6-v2 cross-encoder
-- ner.py — spaCy en_core_web_sm + EntityRuler (VERSION, EXCEPTION, FILEPATH, FUNCTION, PACKAGE)
-- summarizer.py — LLM call with prompts/summarize.md
-- classical_classifier.py — TF-IDF + LR (comparison endpoint)
-- llm_classifier.py — GPT-4o-mini zero-shot (comparison endpoint)
-- Refuse-to-boot: download weights → SHA-256 verify → exit if mismatch
+**✅ 7-B: Real modelserver**
+- app/vault.py — Vault secrets fetcher (minio + openai)
+- app/weights.py — MinIO download + SHA-256 verify; WeightsNotFound → mock, mismatch → exit(1)
+- app/classifier.py — DistilBERT inference (from /tmp/weights/distilbert_weights/)
+- app/classical.py — TF-IDF + LR inference (from /tmp/weights/*.pkl)
+- app/reranker.py — ms-marco-MiniLM-L-6-v2 cross-encoder
+- app/ner.py — spaCy en_core_web_sm + EntityRuler (VERSION, EXCEPTION, PACKAGE)
+- app/summarizer.py — GPT-4o-mini summarizer
+- main.py — FastAPI lifespan: mock fallback if no weights, real mode after training
+- /classify accepts {"texts": list[str]} → {"labels": list[str], "confidences": list[float], "mode": str}
+- /classify/classical accepts {"text": str} → {"label", "confidence", "mode"} (eval only)
 
-**7-C: API refuse-to-boot update**
+**✅ 7-C: API refuse-to-boot update**
 - Verify modelserver /health returns mode="real" (not "mock")
-- Exit if still in mock mode
+- Controlled by REQUIRE_REAL_MODELSERVER env var (default false — mock mode still boots)
 
 **7-T: Integration pass**
 - docker-compose up with real weights

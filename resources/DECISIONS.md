@@ -27,7 +27,7 @@ Every decision in this file is backed by a number or a concrete tradeoff. No cho
 | D16 | Infra — Tracing | **Langfuse cloud** | Built for LLM observability — native generation/tool/RAG spans with token counts. Jaeger is not LLM-aware. Cloud free tier = zero extra container. Best trace tree UI for Friday demo. |
 | D17 | Infra — RAG eval | **RAGAS** | Purpose-built for RAG. Faithfulness + answer relevancy as first-class metrics. One function call in CI. Pinned version = reproducible judge. Hand-label 5/25 to validate agreement. |
 | D18 | Frontend — CSS | **Tailwind CSS** | Vite PurgeCSS strips unused classes → ~3–5KB CSS for 5-component widget. 3–4x faster to build. Runtime theming via CSS variable. Assignment explicitly allows it. |
-| D-deploy | Classifier Deployment | **Fine-tuned DistilBERT** *(pending training metrics)* | Highest F1 + zero per-call cost. LLM zero-shot pays per-call at scale. Classical ML underperforms. **Fill actual metrics before demo.** |
+| D-deploy | Classifier Deployment | **Fine-tuned DistilBERT** (macro-F1 = 0.8867) | Highest F1 among zero-cost models. GPT-4o-mini scores 0.9030 but costs $7.8e-05/call. Classical ML 0.8404. DistilBERT: free inference, 469ms latency, 0.8867 macro-F1. |
 
 ---
 
@@ -787,34 +787,46 @@ rag:
 
 ---
 
-## D-deploy — Classifier Deployment Choice: Fine-tuned DistilBERT (pending training metrics)
+## D-deploy — Classifier Deployment Choice: Fine-tuned DistilBERT
 
 **Decision:** Deploy the fine-tuned `distilbert-base-uncased` classifier as the production model.
-This decision is **confirmed after** the three-way comparison training run — the number goes here.
+Confirmed after the three-way comparison training run on 14,303 pandas-dev/pandas closed issues.
 
-**Why (pre-training expectation):**
+**Actual results on test split (2,146 issues, temporal holdout 2023-05-30 → 2026-05-19):**
 
-| Model | Expected macro-F1 | Latency | Cost/call | Deployable |
+| Model | Test macro-F1 | Latency | Cost/call | Deploy |
 |---|---|---|---|---|
-| TF-IDF + Logistic Regression | ~0.74–0.78 | <1ms | $0 | ✅ |
-| **Fine-tuned DistilBERT** | **~0.87–0.91** | ~50ms | $0 (self-hosted) | ✅ Chosen |
-| GPT-4o-mini zero-shot | ~0.80–0.85 | ~500ms | $0.0003/call | ✅ |
+| TF-IDF + Logistic Regression | 0.8404 | 0.015 ms | $0 | ✅ baseline |
+| **Fine-tuned DistilBERT** | **0.8867** | **469.6 ms** | **$0** | **✅ Chosen** |
+| GPT-4o-mini zero-shot | 0.9030 | 775 ms | $7.8e-05/call | ❌ per-call cost |
 
-1. **Highest expected F1 with zero per-call cost.** LLM zero-shot has no training cost but pays per-call at scale. Classical ML is cheap but underperforms. Fine-tuned DistilBERT is the only option that achieves high F1 with zero per-call cost once trained.
+**Per-class F1 (test set):**
 
-2. **Fits in modelserver container.** DistilBERT (66M params, ~250MB) is already loaded by modelserver for NER+summarizer. The classifier shares the same process — no new container, no new port.
+| Model | bug | feature | docs | question |
+|---|---|---|---|---|
+| TF-IDF + LR | 0.9521 | 0.9195 | 0.8889 | 0.5986 |
+| DistilBERT | 0.9626 | 0.9315 | 0.9197 | 0.7330 |
+| GPT-4o-mini | 0.9620 | 0.9263 | 0.9117 | 0.8118 |
 
-3. **Latency is acceptable.** ~50ms on CPU is well within the interactive triage use case. The LLM zero-shot path at ~500ms per classify call would add noticeable latency to every turn.
+**Training data SHA-256:** `59c6b6e2b336a01f59291c00071366b48d434812c3e7b337c9374e5f3adef71b`
+**Weights SHA-256:** `e23b2bc3f2c50b0cc6491c57d4868bca61e0942824b070d0e1fca08e06a50e0c`
+**W&B run:** `maintainers-copilot / distilbert-pandas-classifier`
+**Best checkpoint:** epoch 2 (early stopping, patience=2, val macro-F1=0.8095)
 
-4. **Deployment decision is conditional:** If training metrics show fine-tuned DistilBERT < 0.80 macro-F1 (unexpectedly poor) or if LLM zero-shot outperforms by >5%, this decision is revisited. The comparison table with actual numbers must appear in this section before Friday demo.
+**Why DistilBERT over GPT-4o-mini (higher F1):**
 
-**Slot to fill after training (required in DECISIONS.md before demo):**
+1. **Zero per-call cost.** GPT-4o-mini classifies at $7.8e-05/call. At 10,000 classifications/day that is $0.78/day = $285/year. DistilBERT runs on the existing modelserver container with no API cost.
+
+2. **Self-contained inference.** DistilBERT is fully offline — no API dependency, no network latency spike, no rate limiting. The classification call goes API → modelserver (internal Docker network) → response in ~470ms.
+
+3. **GPT-4o-mini advantage is on the `question` class only.** The 1.6% overall F1 gap (0.9030 vs 0.8867) is almost entirely in the `question` class (0.8118 vs 0.7330). For a production triage tool, mislabeling `question` as `docs` is a minor UX issue. The per-call cost is a hard operational constraint.
+
+4. **Latency is acceptable.** 470ms for classification is within the interactive triage budget. The classify_issue tool call fires once per conversation turn, not per token.
+
+**Deploy command:**
 ```
-Actual results on test split:
-  Classical ML (TF-IDF + LR):    macro-F1 = ___  latency = ___ms
-  Fine-tuned DistilBERT:         macro-F1 = ___  latency = ___ms
-  GPT-4o-mini zero-shot:         macro-F1 = ___  latency = ___ms
-  → Deploying: ___ because ___
+modelserver /classify → DistilBERT fine-tune (mode: real)
+modelserver /classify/classical → TF-IDF + LR (eval only)
 ```
 
 ---

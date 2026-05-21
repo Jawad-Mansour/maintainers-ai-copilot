@@ -12,7 +12,7 @@ repos:
       - id: mypy
         additional_dependencies: []
         args: [--ignore-missing-imports]
-        exclude: ^(notebooks|\.specify|\.claude|chatbot|modelserver|widget|host|api|tests)/
+        exclude: ^(notebooks|scripts|\.specify|\.claude|chatbot|modelserver|widget|host|api|tests)/
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.18.4

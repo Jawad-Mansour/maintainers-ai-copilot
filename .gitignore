@@ -43,6 +43,9 @@ dist/
 eval_report.json
 wandb/
 
+# Local training data (downloaded by scripts/download_issues.py, not committed)
+data/
+
 # IDE
 .vscode/
 .idea/
