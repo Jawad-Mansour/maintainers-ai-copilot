@@ -79,7 +79,6 @@ def _ensure_user() -> str:
 def _create_conversation(token: str) -> str:
     resp = requests.post(
         f"{API_URL}/conversations",
-        json={"title": "RAG eval"},
         headers={"Authorization": f"Bearer {token}"},
         timeout=15,
     )
@@ -91,7 +90,10 @@ def _create_conversation(token: str) -> str:
 
 
 def retrieve(question: str, conversation_id: str, token: str, top_k: int = 10) -> list[str]:
-    """Return list of retrieved chunk texts (up to top_k)."""
+    """Return list of retrieved chunk texts (up to top_k).
+
+    /rag/search returns a JSON array of ChunkResult objects directly.
+    """
     resp = requests.post(
         f"{API_URL}/rag/search",
         json={"query": question, "conversation_id": conversation_id, "top_k": top_k},
@@ -100,7 +102,8 @@ def retrieve(question: str, conversation_id: str, token: str, top_k: int = 10) -
     )
     resp.raise_for_status()
     data = resp.json()
-    chunks = data.get("chunks") or data.get("results") or []
+    # Response is list[ChunkResult] — a plain JSON array
+    chunks = data if isinstance(data, list) else data.get("chunks") or data.get("results") or []
     texts: list[str] = []
     for c in chunks:
         if isinstance(c, str):
