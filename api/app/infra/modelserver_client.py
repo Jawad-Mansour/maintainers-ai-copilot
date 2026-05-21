@@ -43,3 +43,13 @@ class ModelServerClient:
                 return resp.json()["entities"]
             except httpx.HTTPError as exc:
                 raise ToolFailure(f"modelserver /ner failed: {exc}") from exc
+
+    async def summarize(self, thread: str) -> str:
+        """Summarize a thread via the modelserver LLM summarizer."""
+        async with httpx.AsyncClient(timeout=60) as client:
+            try:
+                resp = await client.post(f"{self._base}/summarize", json={"thread": thread})
+                resp.raise_for_status()
+                return resp.json()["summary"]
+            except httpx.HTTPError as exc:
+                raise ToolFailure(f"modelserver /summarize failed: {exc}") from exc

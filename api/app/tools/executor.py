@@ -7,12 +7,10 @@ import uuid
 from dataclasses import dataclass, field
 
 from minio import Minio
-from openai import AsyncOpenAI
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import ToolFailure
 from app.infra.modelserver_client import ModelServerClient
-from app.infra.prompts import load_prompt
 
 
 @dataclass
@@ -54,21 +52,12 @@ async def execute_tool(name: str, args: dict, ctx: ToolContext) -> str:
         return json.dumps(entities)
 
     if name == "summarize_thread":
-        focus = args.get("focus", "")
         thread_text = "\n".join(
             f"{m['role'].upper()}: {m['content']}"
             for m in ctx.history
             if isinstance(m.get("content"), str)
         )
-        prompt = load_prompt("summarize").format(focus=focus, conversation=thread_text)
-        client = AsyncOpenAI(api_key=ctx.api_key)
-        resp = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=256,
-            temperature=0.3,
-        )
-        return resp.choices[0].message.content or ""
+        return await ctx.modelserver_client.summarize(thread_text)
 
     if name == "write_memory":
         from app.services.memory_service import save_memory

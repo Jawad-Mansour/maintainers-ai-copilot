@@ -28,6 +28,7 @@ from app.api.routes.auth import router as auth_router
 from app.api.routes.chat import router as chat_router
 from app.api.routes.conversations import router as conversations_router
 from app.api.routes.health import router as health_router
+from app.api.routes.memories import router as memories_router
 from app.api.routes.rag import router as rag_router
 from app.api.routes.widgets import router as widgets_router
 from app.exceptions import AppError
@@ -178,6 +179,7 @@ async def unhandled_error_handler(request: Request, exc: Exception) -> JSONRespo
 app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(conversations_router)
+app.include_router(memories_router)
 app.include_router(rag_router)
 app.include_router(chat_router)
 app.include_router(widgets_router)

@@ -39,3 +39,25 @@ async def create(
     memory = Memory(user_id=user_id, summary=summary, embedding=embedding)
     db.add(memory)
     return memory
+
+
+async def list_by_user(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+) -> list[Memory]:
+    from sqlalchemy import select
+
+    result = await db.execute(
+        select(Memory).where(Memory.user_id == user_id).order_by(Memory.created_at.desc())
+    )
+    return list(result.scalars().all())
+
+
+async def delete(
+    db: AsyncSession,
+    memory_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> None:
+    from sqlalchemy import delete as sa_delete
+
+    await db.execute(sa_delete(Memory).where(Memory.id == memory_id, Memory.user_id == user_id))

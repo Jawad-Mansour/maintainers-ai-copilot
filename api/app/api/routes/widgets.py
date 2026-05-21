@@ -76,15 +76,15 @@ async def update_widget(
     widget_id: uuid.UUID,
     req: WidgetUpdate,
     db: DbDep,
-    _admin: AdminDep,
+    admin: AdminDep,
 ) -> WidgetOut:
-    return await widget_service.update_widget(db, widget_id, req)
+    return await widget_service.update_widget(db, widget_id, req, actor_id=admin.id)
 
 
 @router.delete("/{widget_id}", status_code=204)
 async def delete_widget(
     widget_id: uuid.UUID,
     db: DbDep,
-    _admin: AdminDep,
+    admin: AdminDep,
 ) -> None:
-    await widget_service.delete_widget(db, widget_id)
+    await widget_service.delete_widget(db, widget_id, actor_id=admin.id)

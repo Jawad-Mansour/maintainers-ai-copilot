@@ -108,6 +108,16 @@ class ChatResponse(BaseModel):
 # ── Widget schemas ─────────────────────────────────────────────────────────
 
 
+class MemoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    summary: str
+    created_at: datetime
+
+
+# ── Widget schemas ─────────────────────────────────────────────────────────
+
+
 class WidgetCreate(BaseModel):
     name: str
     allowed_origins: list[str] = []
