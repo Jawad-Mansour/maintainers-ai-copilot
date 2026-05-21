@@ -29,7 +29,7 @@ Last updated: 2026-05-20
 | 6 | Evals + CI | ⏳ Pending | |
 | 6-T | Phase 6 tests | ⏳ Pending | |
 | 7 | ML/DL (training + real modelserver) | ✅ Done | 7-A training complete; artifacts in MinIO; modelserver boots in real mode |
-| 7-T | Phase 7 tests | ✅ Done | 13/13 passing; modelserver confirmed mode=real |
+| 7-T | Phase 7 tests | ✅ Done | 13/13 passing; modelserver confirmed mode=real; 119 total tests green |
 | 8 | Docs + polish + tag | ⏳ Pending | |
 
 ---

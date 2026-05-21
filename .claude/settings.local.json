@@ -5,7 +5,11 @@
       "Bash(uv run *)",
       "Bash(uv add *)",
       "Bash(python -c ' *)",
-      "Bash(docker exec *)"
+      "Bash(docker exec *)",
+      "Bash(curl -s http://localhost:8000/health)",
+      "Bash(curl -s http://localhost:8001/health)",
+      "Bash(curl -s http://localhost:8200/v1/sys/health)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('vault:', d.get\\('initialized'\\), d.get\\('sealed'\\)\\)\")"
     ]
   }
 }
