@@ -1,14 +1,16 @@
-"""Widget routes — CRUD (admin only) + GET /widget.js loader script."""
+"""Widget routes — CRUD (admin only).
+
+The public /widget.js loader lives in app/api/routes/embed.py so it is
+served at the root path, not under /widgets.
+"""
 
 from __future__ import annotations
 
-import os
 import uuid
 from typing import Annotated
 
 from dependencies import get_db, require_admin
-from fastapi import APIRouter, Depends, Query
-from fastapi.responses import Response
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import UserOut, WidgetCreate, WidgetOut, WidgetUpdate
@@ -35,31 +37,6 @@ async def list_widgets(
     _admin: AdminDep,
 ) -> list[WidgetOut]:
     return await widget_service.list_widgets(db)
-
-
-_WIDGET_BASE_URL = os.environ.get("WIDGET_BASE_URL", "http://localhost:5173")
-
-
-@router.get("/widget.js")
-async def widget_loader_script(
-    widget_id: Annotated[uuid.UUID, Query(description="Widget ID to embed")],
-) -> Response:
-    """Return the JavaScript loader snippet for embedding the chat widget."""
-    js = f"""(function() {{
-  var widgetId = "{widget_id}";
-  var iframe = document.createElement("iframe");
-  iframe.src = "{_WIDGET_BASE_URL}/?widget_id=" + widgetId;
-  iframe.style.cssText = [
-    "position:fixed", "bottom:20px", "right:20px",
-    "width:400px", "height:600px", "border:none",
-    "border-radius:12px", "box-shadow:0 4px 24px rgba(0,0,0,0.18)",
-    "z-index:99999"
-  ].join(";");
-  iframe.allow = "microphone";
-  document.body.appendChild(iframe);
-}})();
-"""
-    return Response(content=js, media_type="application/javascript")
 
 
 @router.get("/{widget_id}", response_model=WidgetOut)

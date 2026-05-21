@@ -20,6 +20,13 @@ async def get_by_id(db: AsyncSession, user_id: uuid.UUID) -> User | None:
     return result.scalar_one_or_none()
 
 
+async def count(db: AsyncSession) -> int:
+    from sqlalchemy import func
+
+    result = await db.execute(select(func.count()).select_from(User))
+    return result.scalar_one()
+
+
 async def create(
     db: AsyncSession,
     email: str,

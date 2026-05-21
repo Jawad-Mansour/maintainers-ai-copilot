@@ -46,6 +46,22 @@ class RegisterRequest(BaseModel):
     password: str
 
 
+class InviteRequest(BaseModel):
+    email: EmailStr
+    password: str
+    role: str = "user"
+
+
+class AuditLogOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    actor_id: UUID | None
+    action: str
+    target_id: UUID | None
+    diff: dict | None
+    created_at: datetime
+
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
@@ -146,3 +162,14 @@ class WidgetOut(BaseModel):
     enabled_tools: list[str]
     is_active: bool
     created_at: datetime
+
+
+class WidgetPublicOut(BaseModel):
+    """Public widget config — returned without auth. No allowed_origins exposed."""
+
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    theme: dict | None
+    greeting: str
+    enabled_tools: list[str]
+    is_active: bool

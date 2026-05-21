@@ -11,8 +11,8 @@ import uuid
 from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.models import LoginRequest, LoginResponse, RegisterRequest, UserOut
-from app.exceptions import AuthenticationError, ConflictError
+from app.domain.models import InviteRequest, LoginRequest, LoginResponse, RegisterRequest, UserOut
+from app.exceptions import AuthenticationError, ConflictError, ValidationError
 from app.infra.jwt_handler import create_access_token
 from app.repositories import user_repo
 
@@ -26,7 +26,27 @@ async def register(db: AsyncSession, req: RegisterRequest, signing_key: str) -> 
     if existing:
         raise ConflictError("Email already registered")
     hashed = _pwd.hash(req.password)
-    user = await user_repo.create(db, req.email, hashed)
+    is_first = await user_repo.count(db) == 0
+    role = "admin" if is_first else "user"
+    user = await user_repo.create(db, req.email, hashed, role=role)
+    await db.commit()
+    await db.refresh(user)
+    token = create_access_token(str(user.id), user.role, signing_key)
+    return LoginResponse(access_token=token)
+
+
+async def invite(
+    db: AsyncSession,
+    req: InviteRequest,
+    signing_key: str,
+) -> LoginResponse:
+    existing = await user_repo.get_by_email(db, req.email)
+    if existing:
+        raise ConflictError("Email already registered")
+    if req.role not in ("user", "admin"):
+        raise ValidationError("role must be 'user' or 'admin'")
+    hashed = _pwd.hash(req.password)
+    user = await user_repo.create(db, req.email, hashed, role=req.role)
     await db.commit()
     await db.refresh(user)
     token = create_access_token(str(user.id), user.role, signing_key)

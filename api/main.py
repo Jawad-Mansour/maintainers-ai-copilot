@@ -24,9 +24,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from langfuse import Langfuse
 
+from app.api.routes.admin import router as admin_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.chat import router as chat_router
 from app.api.routes.conversations import router as conversations_router
+from app.api.routes.embed import router as embed_router
 from app.api.routes.health import router as health_router
 from app.api.routes.memories import router as memories_router
 from app.api.routes.rag import router as rag_router
@@ -99,6 +101,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "Set REQUIRE_REAL_MODELSERVER=false to bypass during development.",
             file=sys.stderr,
         )
+        sys.exit(1)
+
+    # Validate Langfuse credentials — refuse to boot if tracing backend is misconfigured.
+    try:
+        _lf = Langfuse(
+            public_key=secrets.langfuse_public_key,
+            secret_key=secrets.langfuse_secret_key,
+            host=secrets.langfuse_host,
+        )
+        if not _lf.auth_check():
+            print(
+                "[BOOT FAILURE] Langfuse auth_check failed. "
+                "Verify LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST in Vault.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+    except Exception as exc:
+        print(f"[BOOT FAILURE] Langfuse misconfigured: {exc}", file=sys.stderr)
         sys.exit(1)
     # ──────────────────────────────────────────────────────────────────
 
@@ -178,8 +198,10 @@ async def unhandled_error_handler(request: Request, exc: Exception) -> JSONRespo
 
 app.include_router(health_router)
 app.include_router(auth_router)
+app.include_router(admin_router)
 app.include_router(conversations_router)
 app.include_router(memories_router)
 app.include_router(rag_router)
 app.include_router(chat_router)
 app.include_router(widgets_router)
+app.include_router(embed_router)
