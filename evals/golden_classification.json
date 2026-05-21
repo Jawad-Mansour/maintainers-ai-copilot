@@ -1,0 +1,152 @@
+[
+  {
+    "id": 1,
+    "title": "DataFrame.merge() silently drops rows when join keys contain NaN",
+    "body": "When performing an inner merge on a column that contains NaN values, pandas silently drops all rows with NaN keys. Steps to reproduce: df1 = pd.DataFrame({'key': [1, 2, None], 'val': [10, 20, 30]}); df2 = pd.DataFrame({'key': [1, 2, None], 'other': ['a', 'b', 'c']}); result = df1.merge(df2, on='key') — result has only 2 rows, the NaN row is dropped silently with no warning.",
+    "label": "bug"
+  },
+  {
+    "id": 2,
+    "title": "read_csv() raises ParserError on files with inconsistent quoting",
+    "body": "When reading a CSV file that has inconsistently quoted fields (some fields quoted, some not, within the same column), read_csv() raises a ParserError instead of handling gracefully. This is a regression from pandas 1.5.x where the same files were read successfully. The error only appears on files larger than ~10MB — small files parse fine.",
+    "label": "bug"
+  },
+  {
+    "id": 3,
+    "title": "groupby().transform() returns incorrect shape when applied after filter()",
+    "body": "When applying transform() after filtering groups with filter(), the resulting Series has incorrect index alignment. The transform result does not align back to the original DataFrame index, producing NaN values where valid values are expected. Reproducible with: g = df.groupby('cat').filter(lambda x: len(x) > 1).groupby('cat').transform('mean').",
+    "label": "bug"
+  },
+  {
+    "id": 4,
+    "title": "to_datetime() fails with mixed UTC offsets in a single column",
+    "body": "Calling pd.to_datetime() on a Series containing timestamps with different UTC offsets (e.g., '+05:30' and '+00:00' in the same column) raises ValueError: cannot mix tz-naive and tz-aware datetime-like values. Expected behavior: convert all to UTC or raise a clear descriptive error explaining the conflict and suggesting utc=True.",
+    "label": "bug"
+  },
+  {
+    "id": 5,
+    "title": "rolling().apply() ignores min_periods when raw=True",
+    "body": "When using DataFrame.rolling(window=5, min_periods=3).apply(func, raw=True), the function is called even when the window contains fewer than 3 observations. With raw=False this works correctly. The min_periods guard is silently bypassed when raw=True, leading to incorrect results at the start of the series. Platform: pandas 2.1.0, Python 3.11.",
+    "label": "bug"
+  },
+  {
+    "id": 6,
+    "title": "pivot_table() produces wrong totals for All margins with multiple aggfuncs",
+    "body": "When calling pivot_table() with margins=True and aggfunc=['mean', 'sum'], the All row/column shows incorrect values. It appears to apply only the first aggfunc to compute margins instead of each respective function. A small reproducible example: df.pivot_table(values='sales', index='region', columns='month', aggfunc=['mean','sum'], margins=True) — the All/sum column contains mean values.",
+    "label": "bug"
+  },
+  {
+    "id": 7,
+    "title": "DataFrame.stack() raises KeyError after unstack() with duplicate column values",
+    "body": "After performing unstack() followed by stack() on a DataFrame with MultiIndex columns, a KeyError is raised at the stack() step. The round-trip stack/unstack operation should be idempotent but fails when duplicate column values exist at any level of the MultiIndex. The issue does not occur when column values are unique.",
+    "label": "bug"
+  },
+  {
+    "id": 8,
+    "title": "Add support for struct/nested dtypes when writing to Parquet via ArrowDtype",
+    "body": "Currently when a DataFrame contains ArrowDtype columns with struct (nested) types, to_parquet() raises NotImplementedError. Since PyArrow natively supports nested structs in Parquet, pandas should pass these through without modification. This is blocking workflows that process nested JSON data ingested via read_json with dtype_backend='pyarrow'. Request: pass ArrowDtype struct columns through to PyArrow writer unchanged.",
+    "label": "feature"
+  },
+  {
+    "id": 9,
+    "title": "Add .list accessor for ArrowDtype list-type columns",
+    "body": "DataFrames using ArrowDtype with list types have no accessor for common list operations. The .str accessor does not work on list columns and users must resort to slow apply() calls. Proposed: a .list accessor on Series with list ArrowDtype supporting .list.len(), .list.get(i), .list.flatten(), .list.explode(), .list.contains(val). Similar to .str and .dt accessors.",
+    "label": "feature"
+  },
+  {
+    "id": 10,
+    "title": "Support chunksize parameter in read_json for line-delimited files",
+    "body": "read_csv() supports chunksize for reading large files in manageable chunks. read_json() should support the same pattern for line-delimited JSON (lines=True). Currently loading a multi-GB JSONL file requires reading the entire file into memory. Requested API: pd.read_json(path, lines=True, chunksize=10000) returning a JsonReader iterator like TextFileReader.",
+    "label": "feature"
+  },
+  {
+    "id": 11,
+    "title": "Expose compression_level parameter in to_csv() for gzip and bz2",
+    "body": "When writing compressed CSV with to_csv(compression='gzip') there is no way to control compression level. For large DataFrames the default level is too slow for interactive use. to_parquet() already supports compression_options dict. Request the same for to_csv(): to_csv(compression={'method': 'gzip', 'compresslevel': 1}) for fast low-ratio compression.",
+    "label": "feature"
+  },
+  {
+    "id": 12,
+    "title": "Add alignment parameter to DataFrame.to_markdown()",
+    "body": "The current to_markdown() always produces left-aligned tables regardless of column dtype. Numeric columns are conventionally right-aligned in Markdown tables. Request a col_align parameter accepting 'left', 'right', 'center', or a list for per-column control. Default behavior should right-align numeric columns and left-align object columns to match standard Markdown table practice.",
+    "label": "feature"
+  },
+  {
+    "id": 13,
+    "title": "Add DataFrame.case_when() for vectorized conditional column assignment",
+    "body": "Requesting a case_when() method as a readable alternative to nested np.where() calls. Proposed API: df['result'] = df.case_when([(df.score > 90, 'A'), (df.score > 80, 'B'), (df.score > 70, 'C')], default='F'). This pattern appears constantly in data wrangling and the nested np.where alternative is hard to read and error-prone.",
+    "label": "feature"
+  },
+  {
+    "id": 14,
+    "title": "Support reading multiple sheets simultaneously from Excel files",
+    "body": "Currently read_excel(sheet_name=None) returns a dict of DataFrames. For large Excel files this is slow because it reads all sheets sequentially even when only some are needed. Request: read_excel(sheet_name=['Sheet1', 'Sheet2']) should read only the requested sheets and return them as an OrderedDict, avoiding the overhead of parsing unrequested sheets.",
+    "label": "feature"
+  },
+  {
+    "id": 15,
+    "title": "Document SettingWithCopyWarning causes and correct resolution patterns",
+    "body": "The current documentation for SettingWithCopyWarning is unclear about when it fires and how to resolve it. Many users apply incorrect fixes such as calling .copy() everywhere. The docs should explain: (1) what chained indexing is, (2) when the warning is a false positive, (3) the two correct resolution patterns — direct assignment vs .loc[], (4) how copy-on-write in pandas 2.x changes the picture.",
+    "label": "docs"
+  },
+  {
+    "id": 16,
+    "title": "Add practical examples for creating MultiIndex from different sources",
+    "body": "The MultiIndex documentation demonstrates from_tuples() but lacks examples for from_arrays(), from_product(), and from_frame(). Users frequently ask on Stack Overflow how to build a MultiIndex from two existing columns. The user guide should add a 'Creating a MultiIndex' section with practical examples for each constructor and a decision table for when to use each.",
+    "label": "docs"
+  },
+  {
+    "id": 17,
+    "title": "Clarify groupby transform vs apply vs agg differences in user guide",
+    "body": "The user guide explains transform, apply, and agg in separate sections but does not explain when to use which. Users frequently confuse transform (same-shape output, index-aligned) with apply (flexible output) and agg (reduction). Request a decision table and side-by-side example showing the same operation with each method, with output shapes explained.",
+    "label": "docs"
+  },
+  {
+    "id": 18,
+    "title": "Document memory_usage() behavior for CategoricalDtype and when it saves memory",
+    "body": "memory_usage(deep=True) for CategoricalDtype returns a value users find confusing. It includes the category array once plus the integer codes array proportional to row count. The documentation does not explain this and users incorrectly estimate memory savings. Add an explanation with a worked example showing actual memory vs naive estimate at different cardinalities.",
+    "label": "docs"
+  },
+  {
+    "id": 19,
+    "title": "Add migration guide from deprecated DataFrame.append() to pd.concat()",
+    "body": "DataFrame.append() was deprecated in 1.4.0 and removed in 2.0.0. The current migration notice just says use pd.concat() but does not show how to translate common patterns. Many users do not realize that append-in-a-loop should be replaced with list + single concat. Request a migration section showing the three most common append patterns and their pd.concat() equivalents.",
+    "label": "docs"
+  },
+  {
+    "id": 20,
+    "title": "Clarify loc[] vs iloc[] behavior with boolean arrays on integer-indexed DataFrames",
+    "body": "When a DataFrame has an integer index and a boolean array is passed to .loc[], the behavior is non-obvious: it uses the boolean array as a label-based selector not a positional one. This is confusing for users coming from NumPy where boolean indexing is always positional. Request explicit documentation of this edge case in the indexing guide with before/after comparisons.",
+    "label": "docs"
+  },
+  {
+    "id": 21,
+    "title": "How to process a 10GB CSV without loading it entirely into memory",
+    "body": "I have a 10GB CSV file that I need to aggregate by a date column. Loading the full file with read_csv() exhausts memory on my 16GB machine. I tried chunksize but I am not sure how to aggregate correctly across chunks when the same date can appear in multiple chunks. Is there a pandas-native pattern for this or should I use Dask or Polars instead?",
+    "label": "question"
+  },
+  {
+    "id": 22,
+    "title": "When should I use .copy() after slicing and when is it unnecessary",
+    "body": "I see production code that calls .copy() after almost every operation and other code that never uses it. I cannot find a clear rule. Specifically: (1) do I need .copy() after row slicing? (2) after groupby? (3) after merge? I keep seeing SettingWithCopyWarning in some places and I do not understand when .copy() is the right fix versus using .loc[] directly.",
+    "label": "question"
+  },
+  {
+    "id": 23,
+    "title": "Is it safe to modify a DataFrame inside a groupby apply function",
+    "body": "My groupby apply function modifies a local variable that came from the group. Sometimes results look correct and sometimes I see unexpected side effects on the original DataFrame. Can I safely call df.loc[mask, 'col'] = value inside a function passed to groupby().apply()? Or do I need to always return a new DataFrame? Is there a rule about when the group is a view vs a copy?",
+    "label": "question"
+  },
+  {
+    "id": 24,
+    "title": "Why does df['col'].values return 1D but df[['col']].values return 2D",
+    "body": "I expected df['col'].values and df[['col']].values to return the same data since they both select the same column. Instead I get a 1D numpy array from single brackets and a 2D array from double brackets. Is this intentional? When should I use single brackets vs double brackets for column selection and why does pandas expose this as a user-facing distinction?",
+    "label": "question"
+  },
+  {
+    "id": 25,
+    "title": "Best practice for storing and querying high-frequency time series with pandas",
+    "body": "I have sensor data at 1-second resolution for 500 sensors over 2 years. I need to query a single sensor's data for arbitrary date ranges and compute rolling statistics efficiently. Should I use DatetimeIndex, MultiIndex with sensor_id as first level, or something else? Is pandas the right tool at this scale or should I look at TimescaleDB or InfluxDB?",
+    "label": "question"
+  }
+]

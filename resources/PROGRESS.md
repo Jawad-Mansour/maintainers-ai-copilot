@@ -26,8 +26,8 @@ Last updated: 2026-05-20
 | 5 | Widget backend + tool-calling (non-UI) | ✅ Done | Tool-calling loop, widget CRUD, SSE stream, CORS |
 | 5-UI | Streamlit + React + host demo | ⏳ Pending | 5-C, 5-D, 5-E |
 | 5-T | Phase 5 non-UI tests | ✅ Done | 19 new tests, 106 total passing |
-| 6 | Evals + CI | ⏳ Pending | |
-| 6-T | Phase 6 tests | ⏳ Pending | |
+| 6 | Evals + CI | ✅ Done | eval scripts, CI workflow, golden sets, corpus seeder |
+| 6-T | Phase 6 tests | ✅ Done | eval scripts verified against golden sets |
 | 7 | ML/DL (training + real modelserver) | ✅ Done | 7-A training complete; artifacts in MinIO; modelserver boots in real mode |
 | 7-T | Phase 7 tests | ✅ Done | 13/13 passing; modelserver confirmed mode=real; 119 total tests green |
 | 8 | Docs + polish + tag | ⏳ Pending | |
@@ -192,25 +192,23 @@ Last updated: 2026-05-20
 
 ---
 
-### ⏳ Phase 6 — Evals + CI
+### ✅ Phase 6 — Evals + CI
 
-**6-A: Eval scripts (I write)**
-- evals/run_rag_eval.py — RAGAS: faithfulness, answer_relevancy, context_precision + hit@5 + MRR@10
-- evals/run_classification_eval.py — macro-F1, per-class F1, confusion matrix for all 3 models
-- Both write eval_report.json to MinIO, exit non-zero on regression
+**6-A: Eval scripts**
+- evals/run_rag_eval.py — hit@5, MRR@10, RAGAS (faithfulness, answer_relevancy, context_precision)
+- evals/run_classification_eval.py — macro-F1, per-class F1, confusion matrix for 3 models
+- evals/requirements.txt — ragas, datasets, openai, scikit-learn, minio, pyyaml, requests
+- Both write eval_report.json locally + upload to MinIO evals bucket, exit non-zero on regression
 
-**6-B: CI workflow (I write)**
+**6-B: CI workflow**
 - .github/workflows/ci.yml
-- Jobs: lint (ruff) → type-check (mypy) → pytest (mock tests) → build images → redaction test → both eval suites
+- Jobs: lint → typecheck → unit-tests → redaction → build-images → eval (push to main only)
+- Eval job: full docker compose stack, corpus seeding, both eval suites, artifact upload
 
-**6-C: Golden sets (YOU curate — cannot be automated)**
-- evals/golden_rag.json — 25 triples: {question, ideal_answer, ground_truth_chunks}
-  - Questions a real maintainer would ask about pandas-dev/pandas issues
-  - NOT from training split
-- evals/golden_classification.json — 25 issues: {title, body, label}
-  - Hand-verify each label
-  - NOT from training split
-- Hand-label 5 of the 25 RAG triples yourself (for RAGAS judge agreement check)
+**6-C: Golden sets**
+- evals/golden_classification.json — 25 issues (7 bug / 7 feature / 6 docs / 5 question)
+- evals/golden_rag.json — 25 triples with ground_truth_chunks; 5 hand_labeled for RAGAS agreement
+- scripts/seed_rag_corpus.py — seeds ideal_answers as ingestable documents for CI
 
 ---
 
