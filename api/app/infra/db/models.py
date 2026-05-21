@@ -114,8 +114,9 @@ class Chunk(Base):
     label: Mapped[str | None] = mapped_column(String(20), nullable=True)
     source: Mapped[str | None] = mapped_column(String(255), nullable=True)
     metadata_: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
-    search_vector = mapped_column(Text, nullable=True)  # tsvector managed by trigger
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # search_vector (tsvector) is populated by DB trigger — not mapped here to avoid
+    # asyncpg type-cast errors on INSERT. Referenced only in raw SQL in chunk_repo.
 
     __table_args__ = (
         Index(
@@ -125,7 +126,8 @@ class Chunk(Base):
             postgresql_with={"m": 16, "ef_construction": 64},
             postgresql_ops={"embedding": "vector_cosine_ops"},
         ),
-        Index("ix_chunks_search_vector_gin", "search_vector", postgresql_using="gin"),
+        # ix_chunks_search_vector_gin GIN index on search_vector (tsvector) is defined
+        # in the Alembic migration — not declared here since the column is trigger-managed.
     )
 
 

@@ -5,8 +5,9 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.types import String as SAString
 
 from app.infra.db.models import Chunk
 from app.services.chunker import ChunkRecord
@@ -56,8 +57,8 @@ async def hybrid_search(
                    1 - (embedding <=> CAST(:query_vec AS vector)) AS dense_score
             FROM chunks
             WHERE chunk_type = 'child'
-              AND (:label::text IS NULL OR label = :label)
-              AND (:source::text IS NULL OR source = :source)
+              AND (:label IS NULL OR label = :label)
+              AND (:source IS NULL OR source = :source)
               AND embedding IS NOT NULL
             ORDER BY embedding <=> CAST(:query_vec AS vector)
             LIMIT :top_k
@@ -65,15 +66,15 @@ async def hybrid_search(
         sparse AS (
             SELECT id,
                    ts_rank(
-                       search_vector::tsvector,
+                       search_vector,
                        plainto_tsquery('english', :query_text)
                    ) AS sparse_score
             FROM chunks
             WHERE chunk_type = 'child'
-              AND (:label::text IS NULL OR label = :label)
-              AND (:source::text IS NULL OR source = :source)
+              AND (:label IS NULL OR label = :label)
+              AND (:source IS NULL OR source = :source)
               AND search_vector IS NOT NULL
-              AND search_vector::tsvector @@ plainto_tsquery('english', :query_text)
+              AND search_vector @@ plainto_tsquery('english', :query_text)
         ),
         combined AS (
             SELECT d.id,
@@ -86,7 +87,12 @@ async def hybrid_search(
         JOIN chunks c ON c.id = comb.id
         ORDER BY comb.score DESC
         LIMIT :final_k
-    """)
+    """).bindparams(
+        bindparam("label", type_=SAString()),
+        bindparam("source", type_=SAString()),
+        bindparam("query_text", type_=SAString()),
+        bindparam("query_vec", type_=SAString()),
+    )
 
     result = await db.execute(
         sql,
