@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -X POST http://localhost:8000/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"admin@example.com\",\"password\":\"Admin1234!\"}')",
+      "Bash(python -c \"import json; d=json.load\\(open\\('eval_rag_report.json'\\)\\); print\\(json.dumps\\(d['results'][:3], indent=2\\)\\)\")",
+      "Bash(python -c \"import json; d=json.load\\(open\\('eval_rag_report.json'\\)\\); print\\(list\\(d.keys\\(\\)\\)\\); print\\(json.dumps\\(list\\(d.items\\(\\)\\)[:3], indent=2\\)\\)\")",
+      "Bash(python -c \"import json; d=json.load\\(open\\('eval_rag_report.json'\\)\\); print\\(json.dumps\\(d['failures'][:2], indent=2\\)\\)\")",
+      "Bash(python -c \"import json; d=json.load\\(open\\('evals/golden_rag.json'\\)\\); print\\(json.dumps\\(d[:2], indent=2\\)\\)\")"
+    ]
+  }
+}

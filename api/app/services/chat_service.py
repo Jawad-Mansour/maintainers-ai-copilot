@@ -5,9 +5,13 @@ from __future__ import annotations
 import json
 import uuid
 from collections.abc import AsyncGenerator
+from typing import TYPE_CHECKING
 
 import redis.asyncio as aioredis
 from langfuse import Langfuse
+
+if TYPE_CHECKING:
+    import langfuse as langfuse_module
 from minio import Minio
 from openai import AsyncOpenAI
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,26 +52,47 @@ async def _get_history(
 async def _run_tool_loop(
     messages: list[dict],
     ctx: ToolContext,
+    trace: langfuse_module.client.StatefulTraceClient | None = None,
 ) -> tuple[str, str, list[str]]:
     """Execute tool-calling loop.
 
     Returns (reply, label, sources).
     label is set if the LLM called classify_issue.
     sources is populated if the LLM called search_knowledge_base.
+    Each LLM call and tool call is recorded as a child span on *trace*.
     """
+    import time
+
     client = AsyncOpenAI(api_key=ctx.api_key)
     label = "unknown"
     sources: list[str] = []
 
-    for _ in range(_MAX_TOOL_ITERS):
+    for iteration in range(_MAX_TOOL_ITERS):
+        tool_choice: str | dict = "required" if iteration == 0 else "auto"
+        t0 = time.perf_counter()
         resp = await client.chat.completions.create(
             model="gpt-4o-mini",
             messages=messages,  # type: ignore[arg-type]
             tools=ALL_TOOLS,  # type: ignore[arg-type]
+            tool_choice=tool_choice,  # type: ignore[arg-type]
             max_tokens=512,
             temperature=0.3,
         )
+        latency_ms = int((time.perf_counter() - t0) * 1000)
         msg = resp.choices[0].message
+
+        if trace:
+            usage = resp.usage
+            trace.generation(
+                name=f"llm_iter_{iteration}",
+                model="gpt-4o-mini",
+                input=messages[-3:],
+                output=msg.content or str(msg.tool_calls),
+                usage={"input": usage.prompt_tokens, "output": usage.completion_tokens}
+                if usage
+                else None,
+                metadata={"latency_ms": latency_ms, "iteration": iteration},
+            )
 
         assistant_msg: dict = {"role": "assistant", "content": msg.content}
         if msg.tool_calls:
@@ -85,14 +110,23 @@ async def _run_tool_loop(
             return msg.content or "", label, sources
 
         for tc in msg.tool_calls:
+            t1 = time.perf_counter()
             try:
                 result = await execute_tool(
                     tc.function.name, json.loads(tc.function.arguments), ctx
                 )
             except Exception as exc:
                 result = f"Tool error: {exc}"
+            tool_ms = int((time.perf_counter() - t1) * 1000)
 
-            # Track classify and search results for ChatResponse metadata
+            if trace:
+                trace.span(
+                    name=f"tool_{tc.function.name}",
+                    input=json.loads(tc.function.arguments),
+                    output=result[:500] if isinstance(result, str) else result,
+                    metadata={"latency_ms": tool_ms},
+                )
+
             if tc.function.name == "classify_issue":
                 label = result
             elif tc.function.name == "search_knowledge_base":
@@ -166,9 +200,8 @@ async def chat(
         metadata={"conversation_id": str(req.conversation_id)},
     )
 
-    # 6. Tool-calling loop
-    reply, label, sources = await _run_tool_loop(messages, ctx)
-    trace.generation(name="gpt-4o-mini", model="gpt-4o-mini", input=messages, output=reply)
+    # 6. Tool-calling loop (trace passed for child spans)
+    reply, label, sources = await _run_tool_loop(messages, ctx, trace=trace)
 
     # 7. Persist messages
     await message_repo.create(db, req.conversation_id, "user", req.message)
@@ -228,31 +261,32 @@ async def stream_chat(
         history=history,
     )
 
-    langfuse.trace(
+    stream_trace = langfuse.trace(
         name="chat_stream",
         user_id=str(user_id),
         metadata={"conversation_id": str(req.conversation_id)},
     )
-
-    # Resolve tool calls (non-streaming) — only stream the final LLM generation
-    _reply, label, sources = await _run_tool_loop(messages, ctx)
+    _reply, label, sources = await _run_tool_loop(messages, ctx, trace=stream_trace)
+    if messages and messages[-1].get("role") == "assistant" and not messages[-1].get("tool_calls"):
+        messages.pop()
 
     # Stream the final response
     client = AsyncOpenAI(api_key=api_key)
     reply_parts: list[str] = []
 
     async def _generate() -> AsyncGenerator[str, None]:
-        async with client.chat.completions.stream(
+        stream = await client.chat.completions.create(
             model="gpt-4o-mini",
             messages=messages,  # type: ignore[arg-type]
             max_tokens=512,
             temperature=0.3,
-        ) as stream:
-            async for chunk in stream:
-                delta = chunk.choices[0].delta.content if chunk.choices else None
-                if delta:
-                    reply_parts.append(delta)
-                    yield f"data: {json.dumps({'type': 'token', 'content': delta})}\n\n"
+            stream=True,
+        )
+        async for chunk in stream:
+            delta = chunk.choices[0].delta.content if chunk.choices else None
+            if delta:
+                reply_parts.append(delta)
+                yield f"data: {json.dumps({'type': 'token', 'content': delta})}\n\n"
 
         reply = "".join(reply_parts)
         await message_repo.create(db, req.conversation_id, "user", req.message)

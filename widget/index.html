@@ -1,7 +1,158 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"/><title>Copilot Widget</title></head>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Copilot Widget</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--primary:#6366f1;--bg:#fff;--surface:#f8f9fa;--border:#e2e8f0;--text:#1a202c;--muted:#718096}
+    body{font-family:system-ui,-apple-system,sans-serif;background:transparent;overflow:hidden}
+    #bubble{position:fixed;bottom:20px;right:20px;width:56px;height:56px;background:var(--primary);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,.20);transition:transform .2s;z-index:999}
+    #bubble:hover{transform:scale(1.08)}
+    #bubble svg{width:26px;height:26px;fill:white}
+    #panel{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;opacity:0;pointer-events:none;transform:translateY(12px);transition:opacity .22s,transform .22s}
+    #panel.open{opacity:1;pointer-events:all;transform:translateY(0)}
+    #hdr{background:var(--primary);color:white;padding:14px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+    #hdr h1{font-size:.95rem;font-weight:600;flex:1}
+    #xbtn{background:none;border:none;color:white;cursor:pointer;font-size:1.3rem;padding:2px 4px}
+    #lv{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:12px}
+    #lv input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:.9rem}
+    #lv button{width:100%;padding:10px;background:var(--primary);color:white;border:none;border-radius:8px;cursor:pointer;font-size:.9rem;font-weight:600}
+    #le{color:#e53e3e;font-size:.8rem}
+    #mv{flex:1;display:flex;flex-direction:column;overflow:hidden}
+    #msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+    .m{max-width:85%;padding:9px 12px;border-radius:12px;font-size:.88rem;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+    .m.u{background:var(--primary);color:white;align-self:flex-end;border-bottom-right-radius:3px}
+    .m.a{background:var(--surface);color:var(--text);align-self:flex-start;border-bottom-left-radius:3px}
+    .m.t{color:var(--muted);font-style:italic}
+    .m.g{background:#edf2ff;color:var(--primary);align-self:center;text-align:center;border-radius:12px;max-width:90%}
+    .ms{font-size:.72rem;color:var(--muted);margin-top:4px}
+    .ml{display:inline-block;font-size:.7rem;background:#edf2ff;color:var(--primary);padding:2px 7px;border-radius:999px}
+    #ib{display:flex;gap:8px;padding:10px;border-top:1px solid var(--border);flex-shrink:0;align-items:flex-end}
+    #mi{flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:20px;font-size:.88rem;outline:none;resize:none;line-height:1.4;font-family:inherit;max-height:100px;overflow-y:auto}
+    #mi:focus{border-color:var(--primary)}
+    #snd{background:var(--primary);color:white;border:none;border-radius:50%;width:38px;height:38px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    #snd:disabled{opacity:.5;cursor:default}
+    #snd svg{width:18px;height:18px;fill:white}
+  </style>
+</head>
 <body>
-  <p>Widget stub — Phase 5 builds the React + Vite + Tailwind widget here.</p>
+<div id="bubble"><svg viewBox="0 0 24 24"><path d="M20 2H4C2.9 2 2 2.9 2 4v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/></svg></div>
+<div id="panel">
+  <div id="hdr">
+    <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:white;flex-shrink:0"><path d="M20 2H4C2.9 2 2 2.9 2 4v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+    <h1 id="ht">Maintainer's Copilot</h1>
+    <button id="xbtn">&#x2715;</button>
+  </div>
+  <div id="lv">
+    <div style="font-size:.9rem;color:var(--muted);text-align:center">Sign in to continue</div>
+    <input id="ei" type="email" placeholder="Email" autocomplete="email" />
+    <input id="pi" type="password" placeholder="Password" autocomplete="current-password" />
+    <button id="sb2">Sign in</button>
+    <div id="le"></div>
+  </div>
+  <div id="mv" style="display:none">
+    <div id="msgs"></div>
+    <div id="ib">
+      <textarea id="mi" rows="1" placeholder="Ask about an issue..."></textarea>
+      <button id="snd" title="Send"><svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+var P=new URLSearchParams(location.search),WID=P.get('widget_id')||'';
+var API=P.get('api_url')||'http://localhost:8000';
+var tok=sessionStorage.getItem('cp_tok')||'',cid=sessionStorage.getItem('cp_cid')||'',busy=false,cfg={};
+var G=function(id){return document.getElementById(id);};
+var bubble=G('bubble'),panel=G('panel'),xbtn=G('xbtn'),lv=G('lv'),mv=G('mv');
+var msgs=G('msgs'),mi=G('mi'),snd=G('snd'),sb2=G('sb2'),ei=G('ei'),pi=G('pi'),le=G('le');
+function resize(h){window.parent.postMessage({type:'copilot-resize',widgetId:WID,height:h},'*');}
+function applyTheme(t){
+  if(!t)return;
+  if(t.primary_color)document.documentElement.style.setProperty('--primary',t.primary_color);
+  if(t.position==='bottom-left'){bubble.style.right='auto';bubble.style.left='20px';}
+}
+async function loadCfg(){
+  if(!WID)return;
+  try{var r=await fetch(API+'/widget-config/'+WID);if(r.ok){cfg=await r.json();applyTheme(cfg.theme);}}catch(_){}
+}
+function openPanel(){bubble.style.display='none';panel.classList.add('open');resize(600);if(tok)showChat();}
+function closePanel(){panel.classList.remove('open');bubble.style.display='flex';resize(76);}
+bubble.addEventListener('click',openPanel);xbtn.addEventListener('click',closePanel);
+async function doLogin(){
+  var e=ei.value.trim(),p=pi.value;
+  if(!e||!p){le.textContent='Required.';return;}
+  le.textContent='';sb2.disabled=true;
+  try{
+    var r=await fetch(API+'/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:e,password:p})});
+    if(!r.ok){le.textContent=(await r.json().catch(function(){return{};})).message||'Login failed';return;}
+    tok=(await r.json()).access_token;sessionStorage.setItem('cp_tok',tok);await showChat();
+  }catch(_){le.textContent='Connection error.';}finally{sb2.disabled=false;}
+}
+sb2.addEventListener('click',doLogin);pi.addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
+async function showChat(){
+  if(!cid){
+    try{
+      var r=await fetch(API+'/conversations',{method:'POST',headers:{Authorization:'Bearer '+tok}});
+      if(!r.ok){tok='';sessionStorage.removeItem('cp_tok');return;}
+      cid=(await r.json()).id;sessionStorage.setItem('cp_cid',cid);
+    }catch(_){return;}
+  }
+  lv.style.display='none';mv.style.display='flex';
+  if(!msgs.children.length)addMsg('a',cfg.greeting||'Hi! How can I help you triage issues?',true);
+  mi.focus();
+}
+function addMsg(role,txt,greeting){
+  var d=document.createElement('div');d.className='m '+role+(greeting?' g':'');d.textContent=txt;
+  msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;return d;
+}
+function addMeta(d,srcs,lbl){
+  if(srcs&&srcs.length){
+    var s=document.createElement('div');s.className='ms';
+    s.textContent='Sources: '+srcs.slice(0,3).map(function(u){
+      try{return new URL(u).pathname.split('/').slice(-2).join('/');}catch(_){return u;}
+    }).join(', ');d.appendChild(s);
+  }
+  if(lbl&&lbl!=='unknown'){
+    var l=document.createElement('span');l.className='ml';l.textContent=lbl;
+    d.appendChild(document.createElement('br'));d.appendChild(l);
+  }
+}
+async function sendMsg(){
+  var txt=mi.value.trim();if(!txt||busy||!cid)return;
+  mi.value='';mi.style.height='auto';busy=true;snd.disabled=true;
+  addMsg('u',txt);var ad=addMsg('a','...');ad.classList.add('t');
+  var full='',lbl='',srcs=[];
+  try{
+    var url=API+'/chat/stream'+(WID?'?widget_id='+WID:'');
+    var resp=await fetch(url,{method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok,'Accept':'text/event-stream'},
+      body:JSON.stringify({conversation_id:cid,message:txt})});
+    if(!resp.ok){ad.textContent='Error '+resp.status;ad.classList.remove('t');return;}
+    var rd=resp.body.getReader(),dec=new TextDecoder(),buf='';
+    while(true){
+      var ch=await rd.read();if(ch.done)break;buf+=dec.decode(ch.value,{stream:true});
+      var lines=buf.split('
+');buf=lines.pop();
+      for(var i=0;i<lines.length;i++){
+        if(!lines[i].startsWith('data: '))continue;
+        try{var data=JSON.parse(lines[i].slice(6));
+          if(data.type==='token'){if(ad.classList.contains('t')){ad.textContent='';ad.classList.remove('t');}full+=data.content;ad.textContent=full;msgs.scrollTop=msgs.scrollHeight;}
+          else if(data.type==='done'){lbl=data.label||'';srcs=data.sources||[];}
+        }catch(_){}
+      }
+    }
+    if(!full)ad.textContent='(No response)';addMeta(ad,srcs,lbl);
+  }catch(e){ad.textContent='Connection error.';ad.classList.remove('t');}
+  finally{busy=false;snd.disabled=false;msgs.scrollTop=msgs.scrollHeight;}
+}
+snd.addEventListener('click',sendMsg);
+mi.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg();}});
+mi.addEventListener('input',function(){this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px';});
+loadCfg().then(function(){if(tok)openPanel();});
+})();
+</script>
 </body>
 </html>

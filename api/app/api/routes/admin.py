@@ -38,4 +38,4 @@ async def invite_user(
     _admin: AdminDep,
     secrets: SecretsDep,
 ) -> LoginResponse:
-    return await auth_service.invite(db, req, secrets.jwt_signing_key)
+    return await auth_service.invite(db, req, secrets.jwt_signing_key, actor_id=_admin.id)

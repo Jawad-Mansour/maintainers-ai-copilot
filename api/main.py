@@ -103,7 +103,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
         sys.exit(1)
 
-    # Validate Langfuse credentials — refuse to boot if tracing backend is misconfigured.
+    # Refuse to boot if tracing backend is misconfigured.
     try:
         _lf = Langfuse(
             public_key=secrets.langfuse_public_key,
@@ -113,7 +113,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         if not _lf.auth_check():
             print(
                 "[BOOT FAILURE] Langfuse auth_check failed. "
-                "Verify LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST in Vault.",
+                "Verify langfuse public_key, secret_key, host in Vault at secret/langfuse.",
                 file=sys.stderr,
             )
             sys.exit(1)
@@ -165,6 +165,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── Request middleware: bind trace_id to every structlog context ───────────
+from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
+
+from app.infra.observability import bind_trace_id, clear_trace_id  # noqa: E402
+
+
+class TraceIDMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        trace_id = str(uuid4())
+        bind_trace_id(trace_id)
+        try:
+            response = await call_next(request)
+        finally:
+            clear_trace_id()
+        response.headers["X-Trace-ID"] = trace_id
+        return response
+
+
+app.add_middleware(TraceIDMiddleware)
 
 
 # ── Exception handlers ─────────────────────────────────────────────────────

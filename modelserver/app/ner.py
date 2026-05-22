@@ -46,25 +46,47 @@ _KNOWN_PACKAGES = [
 _PHRASE_PATTERNS: list[dict] = [{"label": "PACKAGE", "pattern": name} for name in _KNOWN_PACKAGES]
 
 _TOKEN_PATTERNS: list[dict] = [
-    # Semantic version: digits separated by dots, optional pre-release suffix
+    # VERSION — single token (e.g. "version 2.0.1" where tokenizer keeps it whole)
     {
         "label": "VERSION",
         "pattern": [{"TEXT": {"REGEX": r"^\d+\.\d+(\.\d+)?(\.dev\d+|[ab]\d+|rc\d+)?$"}}],
+    },
+    # VERSION — three-part split (e.g. pandas==2.0.1 → "2" "." "0" "." "1")
+    # spaCy blank("en") splits on "." between digits as infixes
+    {
+        "label": "VERSION",
+        "pattern": [
+            {"TEXT": {"REGEX": r"^\d+$"}},
+            {"TEXT": "."},
+            {"TEXT": {"REGEX": r"^\d+$"}},
+            {"TEXT": "."},
+            {"TEXT": {"REGEX": r"^\d+[a-z0-9]*$"}},
+        ],
+    },
+    # VERSION — two-part split (e.g. "Python 3.11" → "3" "." "11")
+    {
+        "label": "VERSION",
+        "pattern": [
+            {"TEXT": {"REGEX": r"^\d+$"}},
+            {"TEXT": "."},
+            {"TEXT": {"REGEX": r"^\d+[a-z0-9]*$"}},
+        ],
     },
     # Python exception classes
     {
         "label": "EXCEPTION",
         "pattern": [{"TEXT": {"REGEX": r"^[A-Z]\w*(Error|Exception|Warning)$"}}],
     },
-    # Python file paths (e.g. pandas/core/frame.py)
+    # Python file paths (e.g. frame.py or pandas/core/frame.py when kept as one token)
     {
         "label": "FILEPATH",
         "pattern": [{"TEXT": {"REGEX": r"^[\w/\\]+\.py$"}}],
     },
-    # Method/function calls (e.g. DataFrame.merge()  pd.concat()
+    # Method/function calls — two tokens because spaCy always splits "(" as a suffix
+    # e.g. "DataFrame.merge(" → token "DataFrame.merge" + token "("
     {
         "label": "FUNCTION",
-        "pattern": [{"TEXT": {"REGEX": r"^\w+\.\w+\($"}}],
+        "pattern": [{"TEXT": {"REGEX": r"^\w+\.\w+$"}}, {"TEXT": "("}],
     },
 ]
 

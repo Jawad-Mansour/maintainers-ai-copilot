@@ -16,7 +16,7 @@ Every decision in this file is backed by a number or a concrete tradeoff. No cho
 | D-pre | ML — Preprocessing | **7-step pipeline** (strip HTML, dedup, drop empty, drop dual-label, keep code, normalize, truncate) | Assignment requires defended preprocessing. Code blocks kept — they are the strongest classification signal. |
 | D7 | RAG — Embeddings | **text-embedding-3-small** | MTEB 62.3 — matches bge-small. Entire corpus costs $0.05 to embed. Same OpenAI API key. Adds 0MB to modelserver. 3-large costs 6.5x more for 2.3 MTEB points — not justified. |
 | D8 | RAG — Chunking | **Hierarchical parent-child** (256 / 1024 tokens) | Fixed-size is the baseline to beat. Small chunks = precise embeddings. Large chunks = rich LLM context. Hierarchical gives both: search children, return parent to LLM. |
-| D-meta | RAG — Metadata | **WHERE label + source filter** | Assignment requires metadata filtering. Pre-filters HNSW from 50K→10-15K chunks using current issue label. Fallback: no filter if label unknown. |
+| D-meta | RAG — Metadata | **WHERE label + source filter** | Assignment requires metadata filtering. Pre-filters HNSW from 50K→10-15K chunks using current issue label. Fallback: no filter if label unknown. All corpus chunks carry label="docs" (collection label, not GitHub label — rag_corpus.jsonl includes ALL issues regardless of class). |
 | D9 | RAG — Vector store | **pgvector + HNSW** | Already in the stack. HNSW added in pgvector 0.5+ — same algorithm as Qdrant. ~50K chunks well within its range. Hybrid query in one SQL statement. |
 | D10 | RAG — Sparse | **PostgreSQL FTS** (tsvector + GIN) | Postgres already running. Persistent + indexed. Hybrid in one SQL query. `rank_bm25` rebuilds in-memory on every restart. Elasticsearch adds 2GB for what Postgres already does. |
 | D11 | RAG — Reranker | **ms-marco-MiniLM-L-6-v2** | Single biggest RAG quality improvement. Cross-encoder scores true relevance. MS MARCO training matches our task. 22M params, ~200ms for top-20 on CPU. L-12: +1–2% but +75% latency — not worth it. |
@@ -514,6 +514,8 @@ LIMIT 20;
 - If not classified yet → omit the filter (search all)
 
 **Tradeoff accepted:** Filtering by label assumes the current issue's class is known before RAG runs. In practice the `classify_issue` tool runs first, making the label available. If classification hasn't run, the filter is dropped — full corpus search is the fallback.
+
+**Note — why all corpus chunks carry `label="docs"`:** The `rag_corpus.jsonl` file contains ALL pandas-dev/pandas closed issues regardless of their GitHub label. It is a retrieval corpus, not a classification dataset. Unlike `train.jsonl`/`test.jsonl` (which keep only issues with exactly one recognized GitHub label for classification training), the RAG corpus intentionally includes every issue because breadth of coverage matters more than label purity for retrieval. The `bulk_ingest_corpus.py` script therefore assigns `label="docs"` as the collection label for every ingested record — "docs" signals that these are reference documents, not that their GitHub label was literally "Docs". A query with `label=bug` returns empty not because the filter is broken, but because no chunks were ingested under that collection label. This is correct and defensible: the label filter is designed to partition distinct collections (e.g., official docs vs raw issues), and the current corpus is a single unified collection.
 
 ---
 

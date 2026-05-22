@@ -64,7 +64,7 @@ def _ensure_user() -> str:
         json={"email": EVAL_EMAIL, "password": EVAL_PASSWORD, "role": "user"},
         timeout=15,
     )
-    if reg.status_code not in (200, 201, 400):
+    if reg.status_code not in (200, 201, 400, 409):
         reg.raise_for_status()
 
     login = requests.post(

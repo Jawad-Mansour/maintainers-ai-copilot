@@ -1,0 +1,125 @@
+{
+  "eval": "classification",
+  "n_issues": 25,
+  "models": {
+    "distilbert": {
+      "model": "DistilBERT",
+      "macro_f1": 0.9556,
+      "per_class_f1": {
+        "bug": 1.0,
+        "docs": 1.0,
+        "feature": 0.9333,
+        "question": 0.8889
+      },
+      "confusion_matrix": [
+        [
+          7,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          6,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          7,
+          0
+        ],
+        [
+          0,
+          0,
+          1,
+          4
+        ]
+      ],
+      "classification_report": "              precision    recall  f1-score   support\n\n         bug       1.00      1.00      1.00         7\n        docs       1.00      1.00      1.00         6\n     feature       0.88      1.00      0.93         7\n    question       1.00      0.80      0.89         5\n\n    accuracy                           0.96        25\n   macro avg       0.97      0.95      0.96        25\nweighted avg       0.96      0.96      0.96        25\n"
+    },
+    "classical": {
+      "model": "TF-IDF+LR",
+      "macro_f1": 0.833,
+      "per_class_f1": {
+        "bug": 0.8571,
+        "docs": 0.8,
+        "feature": 0.875,
+        "question": 0.8
+      },
+      "confusion_matrix": [
+        [
+          6,
+          0,
+          0,
+          1
+        ],
+        [
+          1,
+          4,
+          1,
+          0
+        ],
+        [
+          0,
+          0,
+          7,
+          0
+        ],
+        [
+          0,
+          0,
+          1,
+          4
+        ]
+      ],
+      "classification_report": "              precision    recall  f1-score   support\n\n         bug       0.86      0.86      0.86         7\n        docs       1.00      0.67      0.80         6\n     feature       0.78      1.00      0.88         7\n    question       0.80      0.80      0.80         5\n\n    accuracy                           0.84        25\n   macro avg       0.86      0.83      0.83        25\nweighted avg       0.86      0.84      0.84        25\n"
+    },
+    "llm": {
+      "model": "GPT-4o-mini",
+      "macro_f1": 0.9606,
+      "per_class_f1": {
+        "bug": 1.0,
+        "docs": 0.9091,
+        "feature": 0.9333,
+        "question": 1.0
+      },
+      "confusion_matrix": [
+        [
+          7,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          5,
+          1,
+          0
+        ],
+        [
+          0,
+          0,
+          7,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          5
+        ]
+      ],
+      "classification_report": "              precision    recall  f1-score   support\n\n         bug       1.00      1.00      1.00         7\n        docs       1.00      0.83      0.91         6\n     feature       0.88      1.00      0.93         7\n    question       1.00      1.00      1.00         5\n\n    accuracy                           0.96        25\n   macro avg       0.97      0.96      0.96        25\nweighted avg       0.96      0.96      0.96        25\n"
+    }
+  },
+  "thresholds": {
+    "f1_macro": 0.86,
+    "classical_f1": 0.83,
+    "dl_f1": 0.87,
+    "llm_f1": 0.89
+  },
+  "failures": [],
+  "passed": true
+}

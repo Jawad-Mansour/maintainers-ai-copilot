@@ -40,8 +40,11 @@ SEARCH_KNOWLEDGE_BASE: dict = {
                 },
                 "label": {
                     "type": "string",
-                    "description": "Optional label to filter results.",
-                    "enum": ["bug", "feature", "question", "docs", "performance"],
+                    "description": (
+                        "Optional corpus collection label."
+                        " The knowledge base uses label='docs'."
+                        " Leave unset to search the full corpus."
+                    ),
                 },
                 "top_k": {
                     "type": "integer",

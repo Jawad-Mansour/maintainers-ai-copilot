@@ -58,6 +58,16 @@ app/domain/         ← Pydantic domain models
 app/infra/          ← Vault, Redis, MinIO, LLM, redaction adapters
 ```
 
+## Documentation
+
+| Doc | Contents |
+|---|---|
+| [ARCH.md](ARCH.md) | System architecture, service map, request flow, RAG pipeline |
+| [DECISIONS.md](resources/DECISIONS.md) | All 18 technical decisions with justifications and tradeoffs |
+| [RUNBOOK.md](RUNBOOK.md) | First boot, service URLs, common ops, debugging guide |
+| [EVALS.md](EVALS.md) | Evaluation methodology, golden sets, thresholds, measured results |
+| [SECURITY.md](SECURITY.md) | Redaction patterns with pattern-by-pattern justification |
+
 ## Submission
 
 Tag: `v0.1.0-week7` | Deadline: Thursday May 21, 2026 @ 12:00 PM

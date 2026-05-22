@@ -97,12 +97,63 @@ services:
       VAULT_ADDR: ${VAULT_ADDR:-http://vault:8200}
       VAULT_TOKEN: ${VAULT_TOKEN:-root}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-placeholder-replace-before-demo}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev-copilot-public-key-1}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev-copilot-secret-key-1}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
     volumes:
       - ./db/vault-init.sh:/vault-init.sh:ro
     command: sh /vault-init.sh
     networks:
       - copilot-net
     restart: "no"
+
+  # One-shot: creates the langfuse_db database if it doesn't exist
+  langfuse-db-init:
+    image: pgvector/pgvector:pg16
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./db/langfuse-db-init.sh:/langfuse-db-init.sh:ro
+    command: sh /langfuse-db-init.sh
+    networks:
+      - copilot-net
+    restart: "no"
+
+  # ─────────────────────────────────────────────
+  # Observability (Langfuse — self-hosted)
+  # ─────────────────────────────────────────────
+  langfuse:
+    image: langfuse/langfuse:2
+    depends_on:
+      langfuse-db-init:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://copilot:copilot_dev@db:5432/langfuse_db
+      NEXTAUTH_SECRET: "langfuse-dev-nextauth-secret-value"
+      SALT: "langfuse-dev-bcrypt-salt-32plus-ok"
+      NEXTAUTH_URL: "http://localhost:3000"
+      TELEMETRY_ENABLED: "false"
+      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "false"
+      LANGFUSE_INIT_ORG_ID: "org-dev"
+      LANGFUSE_INIT_ORG_NAME: "Dev Org"
+      LANGFUSE_INIT_PROJECT_ID: "project-copilot"
+      LANGFUSE_INIT_PROJECT_NAME: "maintainers-ai-copilot"
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: "pk-lf-dev-copilot-public-key-1"
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: "sk-lf-dev-copilot-secret-key-1"
+      LANGFUSE_INIT_USER_EMAIL: "admin@local.dev"
+      LANGFUSE_INIT_USER_NAME: "Admin"
+      LANGFUSE_INIT_USER_PASSWORD: "admin123"
+    ports:
+      - "${LANGFUSE_PORT:-3000}:3000"
+    networks:
+      - copilot-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://$(hostname):3000/api/public/health 2>/dev/null | grep -q OK"]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 420s
 
   # One-shot: creates MinIO buckets after MinIO is healthy
   minio-init:
@@ -155,6 +206,8 @@ services:
       minio-init:
         condition: service_completed_successfully
       modelserver:
+        condition: service_healthy
+      langfuse:
         condition: service_healthy
     environment:
       VAULT_ADDR: ${VAULT_ADDR:-http://vault:8200}

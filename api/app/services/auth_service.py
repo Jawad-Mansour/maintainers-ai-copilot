@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain.models import InviteRequest, LoginRequest, LoginResponse, RegisterRequest, UserOut
 from app.exceptions import AuthenticationError, ConflictError, ValidationError
 from app.infra.jwt_handler import create_access_token
-from app.repositories import user_repo
+from app.repositories import audit_repo, user_repo
 
 _pwd: CryptContext = CryptContext(
     schemes=["bcrypt"], deprecated="auto", bcrypt__truncate_error=False
@@ -39,6 +39,7 @@ async def invite(
     db: AsyncSession,
     req: InviteRequest,
     signing_key: str,
+    actor_id: uuid.UUID | None = None,
 ) -> LoginResponse:
     existing = await user_repo.get_by_email(db, req.email)
     if existing:
@@ -47,6 +48,13 @@ async def invite(
         raise ValidationError("role must be 'user' or 'admin'")
     hashed = _pwd.hash(req.password)
     user = await user_repo.create(db, req.email, hashed, role=req.role)
+    await audit_repo.log(
+        db,
+        actor_id=actor_id,
+        action="invite_user",
+        target_id=user.id,
+        diff={"email": req.email, "role": req.role},
+    )
     await db.commit()
     await db.refresh(user)
     token = create_access_token(str(user.id), user.role, signing_key)

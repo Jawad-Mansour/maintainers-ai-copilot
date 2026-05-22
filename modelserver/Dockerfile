@@ -15,6 +15,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Download spaCy model used by NER (Phase 7)
 RUN python -m spacy download en_core_web_sm
 
+# Pre-download cross-encoder so runtime boot is instant (not re-downloaded on every rebuild)
+RUN python -c "from sentence_transformers import CrossEncoder; CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')"
+
 COPY . .
 
 EXPOSE 8001

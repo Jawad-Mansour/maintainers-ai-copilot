@@ -27,8 +27,8 @@ vault kv put secret/minio \
   endpoint="http://minio:9000"
 
 vault kv put secret/langfuse \
-  public_key="pk-placeholder" \
-  secret_key="sk-placeholder" \
-  host="https://cloud.langfuse.com"
+  public_key="${LANGFUSE_PUBLIC_KEY:-pk-lf-dev-copilot-public-key-1}" \
+  secret_key="${LANGFUSE_SECRET_KEY:-sk-lf-dev-copilot-secret-key-1}" \
+  host="${LANGFUSE_HOST:-http://langfuse:3000}"
 
 echo "[vault-init] All secrets written."

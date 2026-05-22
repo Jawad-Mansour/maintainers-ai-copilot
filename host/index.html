@@ -3,18 +3,74 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Maintainer's AI Copilot — Demo Host</title>
+  <title>pandas-dev/pandas — Issue Tracker Demo</title>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 4rem auto; padding: 0 1rem; }
-    h1 { font-size: 1.5rem; }
-    .placeholder { border: 2px dashed #ccc; padding: 2rem; text-align: center; color: #666; border-radius: 8px; margin-top: 2rem; }
+    body { font-family: system-ui, -apple-system, sans-serif; max-width: 900px; margin: 0 auto; padding: 2rem 1rem; color: #1a202c; }
+    h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: 0.25rem; }
+    .subtitle { color: #718096; margin-bottom: 2rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th { text-align: left; padding: 8px 12px; border-bottom: 2px solid #e2e8f0; color: #4a5568; font-weight: 600; }
+    td { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; }
+    tr:hover td { background: #f7fafc; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
+    .bug { background: #fed7d7; color: #c53030; }
+    .feature { background: #c6f6d5; color: #276749; }
+    .docs { background: #bee3f8; color: #2b6cb0; }
+    .question { background: #fefcbf; color: #744210; }
+    a { color: #6366f1; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .widget-note { margin-top: 3rem; padding: 1rem; background: #f0f4ff; border-radius: 8px; font-size: 0.85rem; color: #4a5568; }
   </style>
 </head>
 <body>
-  <h1>Maintainer's AI Copilot</h1>
-  <p>This page embeds the copilot widget. The widget is built in Phase 5.</p>
-  <div class="placeholder">
-    Widget placeholder — Phase 5 will embed the React widget here.
+  <h1>pandas-dev/pandas — Issue Tracker</h1>
+  <p class="subtitle">Demo host page. The Maintainer's Copilot widget is embedded in the bottom-right corner.</p>
+
+  <table>
+    <thead>
+      <tr><th>#</th><th>Title</th><th>Label</th><th>Opened</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a href="#">61420</a></td>
+        <td>ENH: Add smart_groupby() for automatic grouping by categorical columns</td>
+        <td><span class="badge feature">feature</span></td>
+        <td>2024-01-15</td>
+      </tr>
+      <tr>
+        <td><a href="#">24333</a></td>
+        <td>DataFrame.groupby() terribly slow when grouping by multiple columns with Categorical</td>
+        <td><span class="badge bug">bug</span></td>
+        <td>2023-11-03</td>
+      </tr>
+      <tr>
+        <td><a href="#">25112</a></td>
+        <td>Fix validation error type SS05 and check in CI</td>
+        <td><span class="badge docs">docs</span></td>
+        <td>2023-09-28</td>
+      </tr>
+      <tr>
+        <td><a href="#">61350</a></td>
+        <td>How to use dropna=False with groupby in pandas 1.1?</td>
+        <td><span class="badge question">question</span></td>
+        <td>2024-01-10</td>
+      </tr>
+      <tr>
+        <td><a href="#">61300</a></td>
+        <td>SettingWithCopyWarning raised unexpectedly after .loc assignment</td>
+        <td><span class="badge bug">bug</span></td>
+        <td>2024-01-08</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="widget-note">
+    The Copilot widget is embedded via a single <code>&lt;script&gt;</code> tag below.
+    It loads from the API's <code>/widget.js</code> loader and runs inside an iframe.
+    Open browser DevTools &rarr; Console to see postMessage resize events.
   </div>
+
+  <!-- Widget embed — one script tag, no other dependencies -->
+  <script src="http://localhost:8000/widget.js" data-widget-id="WIDGET_ID_PLACEHOLDER"></script>
 </body>
 </html>

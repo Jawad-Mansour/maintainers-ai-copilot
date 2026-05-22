@@ -1,0 +1,23 @@
+{
+  "eval": "rag",
+  "n_triples": 25,
+  "retrieval": {
+    "hit_at_5": 0.84,
+    "mrr_at_10": 0.7097
+  },
+  "ragas": null,
+  "judge_agreement": 1.0,
+  "thresholds": {
+    "ragas": {
+      "faithfulness": 0.7,
+      "answer_relevancy": 0.7,
+      "context_precision": 0.65
+    },
+    "retrieval": {
+      "hit_at_5": 0.7,
+      "mrr_at_10": 0.5
+    }
+  },
+  "failures": [],
+  "passed": true
+}

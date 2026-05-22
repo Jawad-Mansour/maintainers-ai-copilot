@@ -4,9 +4,9 @@
     "question": "How does groupby handle NaN keys by default and how can I include them?",
     "ideal_answer": "By default, pandas groupby excludes NaN keys from all groups — rows with NaN in the groupby column are silently dropped from the result. Starting with pandas 1.1.0, you can pass dropna=False to groupby() to include NaN keys as their own group. For older versions, a common workaround is to fill NaN with a sentinel string before grouping and convert back afterward.",
     "ground_truth_chunks": [
-      "groupby dropna=False parameter added pandas 1.1.0",
-      "NaN keys excluded by default in groupby",
-      "groupby silently drops NaN rows"
+      "pandas groupby excludes NaN keys from all groups",
+      "silently dropped from the result",
+      "pass dropna=False to groupby()"
     ],
     "hand_labeled": true
   },
@@ -15,9 +15,9 @@
     "question": "What causes SettingWithCopyWarning and what is the correct fix?",
     "ideal_answer": "SettingWithCopyWarning fires when pandas detects chained indexing — two consecutive indexing operations such as df[mask]['col'] = value. The problem is that the first operation may return a copy, so the assignment modifies the copy and not the original DataFrame. The correct fix is to use a single .loc[] operation: df.loc[mask, 'col'] = value. Calling .copy() silences the warning but does not fix the underlying issue if you intended to modify the original.",
     "ground_truth_chunks": [
-      "SettingWithCopyWarning chained indexing two operations",
-      "df.loc[mask, col] correct single operation",
-      "copy() silences warning does not fix"
+      "SettingWithCopyWarning fires when pandas detects chained indexing",
+      "correct fix is to use a single .loc[] operation",
+      "Calling .copy() silences the warning but does not fix"
     ],
     "hand_labeled": false
   },
@@ -26,10 +26,9 @@
     "question": "What is the difference between merge() and join() in pandas?",
     "ideal_answer": "merge() and join() both combine DataFrames but differ in defaults. join() joins on the index by default and is a convenience wrapper. merge() joins on columns by default and is more flexible — it handles all join types and allows specifying different key column names with left_on and right_on. join() internally calls merge(). Use merge() for column-based joins and join() when both DataFrames share a meaningful index.",
     "ground_truth_chunks": [
-      "join uses index by default",
-      "merge joins on columns default",
-      "join internally calls merge",
-      "left_on right_on different column names"
+      "join() joins on the index by default",
+      "merge() joins on columns by default",
+      "join() internally calls merge()"
     ],
     "hand_labeled": false
   },
@@ -38,10 +37,9 @@
     "question": "How do I efficiently concatenate a large list of DataFrames without running out of memory?",
     "ideal_answer": "Collect all DataFrames in a Python list and call pd.concat(list) exactly once at the end. Calling pd.concat() or the removed append() in a loop is O(n²) because each call copies the entire growing result. For row-wise construction from scratch, building a list of dicts and passing it to pd.DataFrame() once is faster than concatenating DataFrames because it avoids any intermediate DataFrame allocation.",
     "ground_truth_chunks": [
-      "concat list once not in loop",
-      "concat in loop O(n^2) quadratic",
-      "list of dicts to DataFrame faster",
-      "append removed pandas 2.0"
+      "call pd.concat(list) exactly once at the end",
+      "removed append() in a loop",
+      "building a list of dicts and passing it to pd.DataFrame() once"
     ],
     "hand_labeled": false
   },
@@ -50,10 +48,9 @@
     "question": "Why does astype(int) fail when a column has NaN values and how do I convert correctly?",
     "ideal_answer": "NumPy integer dtypes (int32, int64) cannot represent NaN because they are fixed-width types with no sentinel value. When you call astype(int) on a column containing NaN, pandas raises a ValueError. The correct approaches are: (1) fill NaN first with fillna(0) then cast, (2) use nullable integer dtype with astype('Int64') — note the capital I — which uses pd.NA for missing values, or (3) use dtype_backend='numpy_nullable' when reading data.",
     "ground_truth_chunks": [
-      "NumPy int cannot hold NaN fixed-width",
-      "Int64 nullable integer capital I",
-      "astype Int64 handles NaN",
-      "fillna before astype int"
+      "NumPy integer dtypes (int32, int64) cannot represent NaN",
+      "use nullable integer dtype with astype('Int64')",
+      "fill NaN first with fillna(0) then cast"
     ],
     "hand_labeled": true
   },
@@ -62,10 +59,9 @@
     "question": "What is the recommended way to iterate over DataFrame rows and why is iterrows() slow?",
     "ideal_answer": "Explicit row iteration with iterrows() is slow because it wraps each row in a Series object, which carries a full index and dtype inference overhead. itertuples() is 10–100x faster because it returns plain named tuples. However, both are almost always avoidable — vectorized operations on columns are orders of magnitude faster. If row-wise logic is unavoidable, apply() with a function is cleaner than explicit iteration.",
     "ground_truth_chunks": [
-      "iterrows wraps row in Series overhead",
-      "itertuples 10-100x faster than iterrows",
-      "vectorized operations much faster than iteration",
-      "apply row-wise alternative"
+      "iterrows() is slow because it wraps each row in a Series object",
+      "itertuples() is 10",
+      "vectorized operations on columns are orders of magnitude faster"
     ],
     "hand_labeled": false
   },
@@ -74,10 +70,9 @@
     "question": "How does copy-on-write change DataFrame assignment behavior in pandas 2.x?",
     "ideal_answer": "Copy-on-write (CoW), introduced as opt-in in pandas 2.0 and default in pandas 3.0, means any DataFrame or Series derived from another always behaves as an independent copy on write. Modifications to a slice never propagate back to the original. This eliminates SettingWithCopyWarning entirely but requires updating code that relied on view semantics — assignments through slices must now go through .loc[] on the original object.",
     "ground_truth_chunks": [
-      "copy-on-write opt-in pandas 2.0",
-      "CoW default pandas 3.0",
-      "derived object behaves as copy",
-      "SettingWithCopyWarning eliminated CoW"
+      "Copy-on-write (CoW), introduced as opt-in in pandas 2.0 and default in pandas 3.0",
+      "Modifications to a slice never propagate back to the original",
+      "eliminates SettingWithCopyWarning entirely"
     ],
     "hand_labeled": false
   },
@@ -86,10 +81,9 @@
     "question": "What causes read_csv() to infer wrong dtypes and how do I specify them explicitly?",
     "ideal_answer": "read_csv() infers dtypes by sampling the first few thousand rows. Mixed-type columns fall back to object dtype. Integer columns with any NaN become float64 because NumPy integers cannot hold NaN. Specify dtypes explicitly with the dtype parameter, e.g. dtype={'id': 'Int64', 'price': float}. For integer columns with NA, use nullable types: dtype='Int64'. For all nullable types at once, use dtype_backend='numpy_nullable' or dtype_backend='pyarrow'.",
     "ground_truth_chunks": [
-      "read_csv infers dtype from sample rows",
-      "integer with NaN becomes float64",
-      "dtype parameter explicit specification",
-      "dtype_backend numpy_nullable pyarrow"
+      "read_csv() infers dtypes by sampling the first few thousand rows",
+      "Integer columns with any NaN become float64",
+      "Specify dtypes explicitly with the dtype parameter"
     ],
     "hand_labeled": false
   },
@@ -98,10 +92,9 @@
     "question": "How does resample() differ from groupby() with pd.Grouper for time series?",
     "ideal_answer": "resample() is optimized for time series resampling on a DatetimeIndex. It handles bin edges, closed/label parameters, and DST transitions correctly by default. groupby(pd.Grouper(freq='D')) is functionally equivalent but requires more explicit configuration. resample() is preferred for time series resampling because it is more readable, produces correct bin boundaries, and handles edge cases like daylight saving time that groupby does not manage automatically.",
     "ground_truth_chunks": [
-      "resample optimized DatetimeIndex",
-      "groupby Grouper freq equivalent",
-      "resample handles DST daylight saving",
-      "resample closed label parameters"
+      "resample() is optimized for time series resampling on a DatetimeIndex",
+      "groupby(pd.Grouper(freq='D')) is functionally equivalent",
+      "handles edge cases like daylight saving time"
     ],
     "hand_labeled": false
   },
@@ -110,10 +103,9 @@
     "question": "How can I select rows from a MultiIndex DataFrame for a specific top-level key?",
     "ideal_answer": "Use df.loc['key'] to select all rows where the first level of the MultiIndex equals 'key'. For partial slicing across multiple levels, use df.loc[('key1', 'key2')]. For cross-section selection use df.xs('key', level=0). Before using slice objects in loc[], call sort_index() on the DataFrame — slicing an unsorted MultiIndex raises UnsortedIndexError. xs() does not require sorting.",
     "ground_truth_chunks": [
-      "df.loc key MultiIndex top level",
-      "UnsortedIndexError sort_index before slice",
-      "xs cross-section no sort required",
-      "partial slice loc MultiIndex"
+      "slicing an unsorted MultiIndex raises UnsortedIndexError",
+      "df.xs('key', level=0)",
+      "call sort_index() on the DataFrame"
     ],
     "hand_labeled": true
   },
@@ -122,10 +114,9 @@
     "question": "When does apply() call the function twice on the first group and how do I avoid side effects?",
     "ideal_answer": "pandas calls the function on the first group twice during groupby().apply(). The first call is a speculative dry run to infer the output type and shape before processing all groups. This is by design and documented behavior. If your function has side effects — writing to a file, incrementing a counter, calling an external API — it will be invoked one extra time. Workaround: track whether side effects have run inside the function or restructure to separate computation from side effects.",
     "ground_truth_chunks": [
-      "groupby apply first group called twice",
-      "speculative execution output type inference",
-      "side effects apply extra call",
-      "documented groupby apply behavior"
+      "calls the function on the first group twice during groupby().apply()",
+      "speculative dry run to infer the output type",
+      "it will be invoked one extra time"
     ],
     "hand_labeled": false
   },
@@ -134,9 +125,9 @@
     "question": "What is the memory difference between object dtype and StringDtype for string columns?",
     "ideal_answer": "Object dtype stores Python string objects in memory — each element carries full Python object overhead (~50 bytes) plus the string content. StringDtype (introduced in pandas 1.0.0) uses a more efficient internal representation and integrates with pd.NA for missing values. For the best string performance, use ArrowDtype with the string type, which leverages Apache Arrow's dictionary encoding and can represent repeated strings in a fraction of the memory.",
     "ground_truth_chunks": [
-      "object dtype Python object overhead 50 bytes",
-      "StringDtype introduced pandas 1.0.0",
-      "ArrowDtype string dictionary encoding memory"
+      "each element carries full Python object overhead (~50 bytes)",
+      "StringDtype (introduced in pandas 1.0.0)",
+      "leverages Apache Arrow's dictionary encoding"
     ],
     "hand_labeled": false
   },
@@ -145,9 +136,9 @@
     "question": "How do I correctly merge two DataFrames when the key columns have different names?",
     "ideal_answer": "Use the left_on and right_on parameters: pd.merge(left, right, left_on='user_id', right_on='id'). The result contains both key columns. If you only want one, drop the duplicate after merging with .drop(columns=['id']). Alternatively, rename one column before merging to make both names match and then use the simpler on parameter.",
     "ground_truth_chunks": [
-      "left_on right_on different key names",
-      "merge result contains both key columns",
-      "rename before merge on parameter"
+      "pd.merge(left, right, left_on='user_id', right_on='id')",
+      "The result contains both key columns",
+      "rename one column before merging"
     ],
     "hand_labeled": false
   },
@@ -156,10 +147,9 @@
     "question": "Why does filtering a DataFrame not free memory and how do I fix it?",
     "ideal_answer": "A filtered DataFrame (df[mask]) holds a reference to the underlying NumPy array of the original — the filter does not copy the data. The filtered result keeps the full original memory block alive even if you only selected 10% of rows. To release the reference, call .copy() on the result: filtered = df[mask].copy(). This allows Python's garbage collector to reclaim the original array when no other references exist.",
     "ground_truth_chunks": [
-      "filter holds reference original array",
-      "filtered result keeps memory alive",
-      "copy() releases reference garbage collection",
-      "view does not copy underlying data"
+      "holds a reference to the underlying NumPy array of the original",
+      "The filtered result keeps the full original memory block alive",
+      "call .copy() on the result: filtered = df[mask].copy()"
     ],
     "hand_labeled": false
   },
@@ -168,10 +158,9 @@
     "question": "How does pandas handle duplicate column names and which operations break?",
     "ideal_answer": "Pandas allows DataFrames with duplicate column names but many operations produce incorrect or undefined results. Selecting a duplicated column with df['col'] returns a DataFrame of all matching columns rather than a Series. Operations including rename(), merge(), pivot(), set_index(), and to_dict() may raise errors or silently return wrong results. The recommendation is to always ensure unique column names — use df.columns = range(len(df.columns)) or manual renaming immediately after any operation that could produce duplicates.",
     "ground_truth_chunks": [
-      "duplicate column names allowed in DataFrame",
-      "selection of duplicate returns DataFrame not Series",
-      "merge pivot break with duplicate columns",
-      "rename set_index duplicate column issues"
+      "Pandas allows DataFrames with duplicate column names",
+      "returns a DataFrame of all matching columns rather than a Series",
+      "rename(), merge(), pivot(), set_index(), and to_dict()"
     ],
     "hand_labeled": true
   },
@@ -180,10 +169,9 @@
     "question": "What is the correct way to add rows to a DataFrame incrementally in a loop?",
     "ideal_answer": "Collect data as a list of dicts inside the loop and call pd.DataFrame(list_of_dicts) once at the end. This is O(n) and allocates memory only once. pd.concat() in a loop or the removed DataFrame.append() are O(n²) — each call copies the entire growing result. For very large streams, process in batches: collect 10,000 rows, convert to DataFrame, store the batch, then concat all batches once at the very end.",
     "ground_truth_chunks": [
-      "list of dicts once O(n) pattern",
-      "concat in loop O(n^2) avoid",
-      "append removed pandas 2.0 use concat",
-      "batch processing large incremental data"
+      "call pd.DataFrame(list_of_dicts) once at the end",
+      "pd.concat() in a loop or the removed DataFrame.append()",
+      "This is O(n) and allocates memory only once"
     ],
     "hand_labeled": false
   },
@@ -192,10 +180,9 @@
     "question": "How do I use where() and mask() and when should I use each?",
     "ideal_answer": "where(cond) keeps values where cond is True and replaces with NaN or a specified other= value where cond is False. mask(cond) is the exact inverse — it replaces values where cond is True and keeps where False. Both are vectorized and much faster than apply() or np.where(). Choose where() when you want to keep most values and replace a minority; choose mask() when you want to blank out matching values. Unlike np.where(), both preserve the original index and handle NA correctly.",
     "ground_truth_chunks": [
-      "where keeps True replaces False",
-      "mask replaces True keeps False",
-      "where mask inverse of each other",
-      "vectorized faster than apply np.where"
+      "where(cond) keeps values where cond is True and replaces with NaN",
+      "mask(cond) is the exact inverse",
+      "Both are vectorized and much faster than apply() or np.where()"
     ],
     "hand_labeled": false
   },
@@ -204,10 +191,9 @@
     "question": "How does the engine parameter in read_csv() affect performance and which should I choose?",
     "ideal_answer": "read_csv() offers three engines: 'c' (default) is the fastest for standard CSV files; 'python' is more feature-complete and handles edge cases the C engine cannot; 'pyarrow' is fastest for very large files using Apache Arrow's columnar reader. The C engine is 3–5x faster than Python for typical workloads. PyArrow is fastest for multi-GB files but requires pyarrow installed and has some format limitations. The engine only affects parsing speed — the output DataFrame is identical.",
     "ground_truth_chunks": [
-      "read_csv engine c python pyarrow",
-      "C engine default 3-5x faster",
-      "pyarrow engine fastest large files",
-      "engine output DataFrame identical"
+      "read_csv() offers three engines:",
+      "pyarrow' is fastest for very large files",
+      "The engine only affects parsing speed"
     ],
     "hand_labeled": false
   },
@@ -216,10 +202,9 @@
     "question": "How do I handle a DataFrame column that contains a mix of numeric strings and NaN?",
     "ideal_answer": "Mixed-type columns are stored as object dtype. Use pd.to_numeric(series, errors='coerce') to convert numeric strings to float and replace non-numeric values with NaN. If you need integer output, chain with astype('Int64') to use the nullable integer dtype. For datetime strings mixed with NaN, use pd.to_datetime(series, errors='coerce'). Avoid keeping object dtype for large columns — it carries Python overhead per cell and prevents vectorized numeric operations.",
     "ground_truth_chunks": [
-      "to_numeric errors coerce replaces non-numeric with NaN",
-      "object dtype mixed types Python overhead",
-      "Int64 nullable integer after to_numeric",
-      "to_datetime errors coerce mixed datetime"
+      "pd.to_numeric(series, errors='coerce')",
+      "replace non-numeric values with NaN",
+      "pd.to_datetime(series, errors='coerce')"
     ],
     "hand_labeled": false
   },
@@ -228,10 +213,9 @@
     "question": "What is the difference between transform() and apply() in a groupby context?",
     "ideal_answer": "transform() returns a result with the same shape and index as the input DataFrame — each value in a group is replaced by the transformed value, and the result aligns back to the original index. apply() is flexible and can return any shape: a scalar, a Series, or a DataFrame. Use transform() when you need to broadcast a group-level computation back to every row in that group (e.g., subtract group mean). Use apply() for reductions or complex operations that change the output shape.",
     "ground_truth_chunks": [
-      "transform same shape index as input",
-      "apply flexible output scalar Series DataFrame",
-      "transform broadcast group value to rows",
-      "apply for reductions complex operations"
+      "transform() returns a result with the same shape and index as the input DataFrame",
+      "apply() is flexible and can return any shape: a scalar, a Series, or a DataFrame",
+      "broadcast a group-level computation back to every row"
     ],
     "hand_labeled": true
   },
@@ -240,10 +224,9 @@
     "question": "How do timezone-aware and timezone-naive timestamps interact in pandas operations?",
     "ideal_answer": "Mixing timezone-aware and timezone-naive timestamps in any pandas operation raises a TypeError — pandas refuses to compare or combine them because the result is ambiguous. To localize a naive timestamp, use tz_localize('UTC') to attach a timezone. To convert between timezones, use tz_convert('US/Eastern'). To strip timezone information, use tz_localize(None). When concatenating mixed-tz DataFrames, convert everything to UTC first.",
     "ground_truth_chunks": [
-      "TypeError mixing tz-aware tz-naive",
-      "tz_localize attaches timezone to naive",
-      "tz_convert changes timezone",
-      "tz_localize None removes timezone"
+      "Mixing timezone-aware and timezone-naive timestamps in any pandas operation raises a TypeError",
+      "use tz_localize('UTC') to attach a timezone",
+      "use tz_localize(None)"
     ],
     "hand_labeled": false
   },
@@ -252,10 +235,9 @@
     "question": "How does pandas decide whether indexing returns a view or a copy?",
     "ideal_answer": "Pandas view/copy semantics depend on internal block structure and are not reliably predictable. Slicing rows from a single-dtype DataFrame may return a view; selecting non-contiguous rows always returns a copy; boolean indexing always returns a copy. The only guaranteed way to get a copy is to call .copy() explicitly. With copy-on-write semantics (default in pandas 3.0), this distinction no longer matters because all derived objects behave as copies on write.",
     "ground_truth_chunks": [
-      "view copy semantics unpredictable",
-      "boolean indexing always returns copy",
-      "copy() explicit guaranteed copy",
-      "CoW pandas 3.0 distinction irrelevant"
+      "view/copy semantics depend on internal block structure and are not reliably predictable",
+      "boolean indexing always returns a copy",
+      "The only guaranteed way to get a copy is to call .copy() explicitly"
     ],
     "hand_labeled": false
   },
@@ -264,10 +246,9 @@
     "question": "How do I compute a running total grouped by category while preserving the original DataFrame index?",
     "ideal_answer": "Use groupby().transform('cumsum') which computes cumulative sum within each group and returns a Series with the same index as the original DataFrame. This is faster than apply() for this use case because transform uses optimized Cython paths. Example: df['running_total'] = df.groupby('category')['value'].transform('cumsum'). The result aligns back to every row in the original DataFrame, including groups of different sizes.",
     "ground_truth_chunks": [
-      "groupby transform cumsum same index",
-      "transform Cython optimized path",
-      "transform preserves original index alignment",
-      "cumsum within group running total"
+      "groupby().transform('cumsum')",
+      "transform uses optimized Cython paths",
+      "df.groupby('category')['value'].transform('cumsum')"
     ],
     "hand_labeled": false
   },
@@ -276,10 +257,9 @@
     "question": "What are the performance implications of using a DatetimeIndex vs storing dates as a regular column?",
     "ideal_answer": "A DatetimeIndex enables resample(), between_time(), date_range slicing with strings, and tz_convert() directly on the index — operations that require explicit pd.Grouper calls or column-level operations when dates are in a regular column. For pure lookup speed, a sorted RangeIndex is fastest. DatetimeIndex string slicing (df['2023-01-01':'2023-06-30']) requires parsing on every call. For time series with frequent resampling or rolling operations, DatetimeIndex is worth the overhead.",
     "ground_truth_chunks": [
-      "DatetimeIndex enables resample between_time",
-      "RangeIndex fastest pure lookup",
-      "DatetimeIndex string slice parsing overhead",
-      "groupby Grouper required without DatetimeIndex"
+      "A DatetimeIndex enables resample(), between_time()",
+      "a sorted RangeIndex is fastest",
+      "DatetimeIndex string slicing"
     ],
     "hand_labeled": false
   },
@@ -288,11 +268,10 @@
     "question": "How does apply() behave differently depending on whether the function returns a scalar, Series, or DataFrame?",
     "ideal_answer": "When applied to a GroupBy, a function returning a scalar produces a Series with one value per group. A function returning a Series produces a DataFrame where each group's Series becomes a row. A function returning a DataFrame produces a hierarchically indexed result. This auto-detection is called result type inference and can be surprising. Use result_type='expand', 'reduce', or 'broadcast' to make the output shape explicit and avoid inference surprises.",
     "ground_truth_chunks": [
-      "apply scalar returns one value per group",
-      "apply Series returns DataFrame rows",
-      "result_type expand reduce broadcast explicit",
-      "result type inference auto-detection"
+      "a function returning a scalar produces a Series with one value per group",
+      "result type inference",
+      "Use result_type='expand', 'reduce', or 'broadcast'"
     ],
-    "hand_labeled": false
+    "hand_labeled": true
   }
 ]

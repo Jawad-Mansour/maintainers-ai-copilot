@@ -44,7 +44,14 @@ async def execute_tool(name: str, args: dict, ctx: ToolContext) -> str:
             ctx.db, req, ctx.api_key, ctx.minio_client, ctx.modelserver_client
         )
         return json.dumps(
-            [{"text": r.text, "source": r.source, "score": round(r.score, 4)} for r in results]
+            [
+                {
+                    "text": r.parent_text or r.text,
+                    "source": r.source,
+                    "score": round(r.score, 4),
+                }
+                for r in results
+            ]
         )
 
     if name == "extract_entities":
