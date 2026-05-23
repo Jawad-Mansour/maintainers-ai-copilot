@@ -18,7 +18,8 @@ from fastapi.responses import JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import WidgetPublicOut
-from app.exceptions import PermissionDenied
+from app.exceptions import NotFoundError, PermissionDenied
+from app.repositories import widget_repo
 from app.services import widget_service
 
 router = APIRouter(tags=["embed"])
@@ -26,6 +27,7 @@ router = APIRouter(tags=["embed"])
 DbDep = Annotated[AsyncSession, Depends(get_db)]
 
 _WIDGET_BASE_URL = os.environ.get("WIDGET_BASE_URL", "http://localhost:5173")
+_API_PUBLIC_URL = os.environ.get("API_PUBLIC_URL", "http://localhost:8000")
 
 
 @router.get("/widget.js", include_in_schema=False)
@@ -43,20 +45,16 @@ async def widget_loader() -> Response:
     js = f"""(function () {{
   var script = document.currentScript;
   var widgetId = script && script.getAttribute('data-widget-id');
-  if (!widgetId) {{
-    console.error('[Copilot Widget] Missing data-widget-id on <script> tag.');
-    return;
-  }}
+  if (!widgetId) {{ console.error('[Copilot] Missing data-widget-id'); return; }}
   var iframe = document.createElement('iframe');
-  iframe.src = '{_WIDGET_BASE_URL}/?widget_id=' + encodeURIComponent(widgetId);
-  iframe.style.cssText = [
-    'position:fixed', 'bottom:20px', 'right:20px',
-    'width:400px', 'height:600px', 'border:none',
-    'border-radius:12px', 'box-shadow:0 4px 24px rgba(0,0,0,0.18)',
-    'z-index:99999'
-  ].join(';');
-  iframe.allow = 'microphone';
+  iframe.src = '{_WIDGET_BASE_URL}/?widget_id='
+    + encodeURIComponent(widgetId) + '&api_url={_API_PUBLIC_URL}';
+  iframe.setAttribute('allowtransparency', 'true');
+  iframe.setAttribute('frameborder', '0');
   iframe.id = 'copilot-widget-' + widgetId;
+  iframe.style.cssText = 'position:fixed;bottom:0;right:0;width:400px;'
+    + 'height:80px;border:none;background:transparent;'
+    + 'z-index:2147483647;transition:height 0.25s cubic-bezier(0.4,0,0.2,1)';
   document.body.appendChild(iframe);
   window.addEventListener('message', function (e) {{
     if (e.data && e.data.type === 'copilot-resize' && e.data.widgetId === widgetId) {{
@@ -70,6 +68,15 @@ async def widget_loader() -> Response:
         media_type="application/javascript",
         headers={"Cache-Control": "public, max-age=300"},
     )
+
+
+@router.get("/widget-default")
+async def get_default_widget(db: DbDep) -> JSONResponse:
+    """Public — returns the ID of the first active widget for host-page demo setup."""
+    widget = await widget_repo.get_first_active(db)
+    if not widget:
+        raise NotFoundError("No active widget found. Create one via the Admin panel.")
+    return JSONResponse({"id": str(widget.id)})
 
 
 @router.get("/widget-config/{widget_id}", response_model=WidgetPublicOut)

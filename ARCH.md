@@ -1,234 +1,326 @@
-# ARCH.md — System Architecture
-
-## Overview
-
-Maintainer's AI Copilot is a single-LLM tool-calling chatbot that helps open-source maintainers triage GitHub issues. The architecture is a layered FastAPI monolith backed by PostgreSQL (pgvector), Redis, MinIO, and Vault, with a separate modelserver container for CPU-bound ML inference.
-
----
+# Architecture
 
 ## Service Map
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│  Browser / Host Page                                             │
-│  host:3001  ──embed script──▶  widget:5173 (iframe)             │
-│                                     │ JWT + SSE                 │
-│  chatbot:8501 (Streamlit) ──────────┤                           │
-└────────────────────────────────────┼─────────────────────────────┘
-                                     │ HTTP
-                              ┌──────▼──────┐
-                              │   api:8000  │  FastAPI
-                              │  (routes /  │
-                              │  services / │
-                              │  repos)     │
-                              └──┬──┬──┬───┘
-              ┌──────────────────┘  │  └──────────────────┐
-              ▼                     ▼                      ▼
-     ┌────────────────┐   ┌─────────────────┐   ┌─────────────────┐
-     │   db:5432      │   │  redis:6379     │   │  minio:9000     │
-     │ pgvector/pg16  │   │  Redis 7        │   │  MinIO          │
-     │ (app + langfuse│   │  conversation   │   │  model weights  │
-     │  schemas)      │   │  cache / TTL    │   │  eval reports   │
-     └────────────────┘   └─────────────────┘   └─────────────────┘
-              │
-     ┌────────▼────────┐
-     │  modelserver    │  FastAPI on :8001
-     │  :8001          │  DistilBERT classifier
-     │                 │  spaCy NER
-     │                 │  ms-marco reranker
-     └─────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                          Host Browser                               │
+│  host:3001 ──<script src="/widget.js">──► widget:5173 (iframe)     │
+│  chatbot:8501 (Streamlit)                                           │
+└──────────────┬──────────────────────────────────┬───────────────────┘
+               │ HTTP/SSE                          │ HTTP/SSE
+               ▼                                  ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                        api:8000 (FastAPI)                            │
+│  /auth   /chat/stream   /memories   /rag   /widgets   /widget.js    │
+│                                                                      │
+│  DynamicCORSMiddleware ◄── _cors_origins (env ∪ DB widget origins)  │
+│  TraceIDMiddleware      ◄── X-Trace-ID on every response            │
+│  AppError handler       ◄── {code, message, request_id} → no trace  │
+└────┬────────────┬──────────────┬──────────────┬──────────────────────┘
+     │            │              │              │
+     ▼            ▼              ▼              ▼
+ db:5432      redis:6379     minio:9000     modelserver:8001
+ (pgvector)   (history +     (weights +     (classify / NER /
+              cache)         evals +        summarize / rerank)
+                             snapshots)
+     │
+     ▼
+ vault:8200
+ (all secrets fetched at startup, never per-request)
 
-     ┌─────────────────┐   ┌─────────────────┐
-     │  vault:8200     │   │  langfuse:3000   │
-     │  HashiCorp Vault│   │  self-hosted     │
-     │  (all secrets)  │   │  LLM tracing     │
-     └─────────────────┘   └─────────────────┘
+ langfuse:3000
+ (every LLM call / tool call / RAG retrieval = a span)
 ```
 
 ---
 
-## Layer Architecture (API)
+## Code Layer Boundaries
 
-Requests flow strictly downward — no layer skips another:
-
-```
-api/app/api/routes/     ← HTTP routing, auth, request/response serialisation
-api/app/services/       ← Business logic, transactions, orchestration
-api/app/repositories/   ← SQL queries only (SQLAlchemy async)
-api/app/domain/         ← Pydantic domain models (shared contracts)
-api/app/infra/          ← Vault, Redis, MinIO, LLM, redaction adapters
-```
-
----
-
-## Request Flow: Chat Turn
+Enforced in every route — no layer skips another:
 
 ```
-POST /chat/stream  (Bearer JWT)
-  │
-  ▼ TraceIDMiddleware (main.py)
-  │  generates UUID trace_id → binds to structlog context → X-Trace-ID header
-  │
-  ▼ auth dependency → verify JWT → load UserOut
-  │
-  ▼ chat_service.stream_chat()
-  │  1. Load conversation history from Redis (key: conversation:{user_id}:{cid})
-  │  2. Embed user message → retrieve top-3 semantic memories from pgvector
-  │  3. Build system prompt with {memories} injected
-  │  4. Create Langfuse trace (trace_id bound)
-  │  5. _run_tool_loop(messages, ctx, trace)
-  │      ├─ iter 0: tool_choice="required" (forces ≥1 tool call)
-  │      ├─ OpenAI gpt-4o-mini (streaming=False for tool loop)
-  │      │    └─ trace.generation() child span per iteration
-  │      ├─ For each tool call:
-  │      │    ├─ classify_issue  → POST modelserver:8001/classify
-  │      │    ├─ extract_entities → POST modelserver:8001/ner
-  │      │    ├─ summarize_thread → LLM call (prompts/summarize.md)
-  │      │    ├─ search_knowledge_base → hybrid_search() → rerank()
-  │      │    │    ├─ HyDE: LLM generates hypothetical answer
-  │      │    │    ├─ embed(0.5*query + 0.5*hyde) → pgvector cosine
-  │      │    │    ├─ FTS tsvector → hybrid score (0.6 dense + 0.4 sparse)
-  │      │    │    └─ cross-encoder rerank top-20 → top-5
-  │      │    └─ write_memory → embed + upsert long_term_memories
-  │      │    └─ trace.span() child span per tool call
-  │      └─ loop until no tool calls (max 6 iterations)
-  │  6. Stream final response tokens via SSE
-  │  7. Append messages to Redis (TTL reset to 24h)
-  │  8. Persist assistant turn to DB (conversations / messages tables)
-  │  9. Structlog JSON line with trace_id, latency, token counts (all redacted)
-  │
-  ▼ SSE stream: data: {"type":"token","content":"..."}\n\n
-                data: {"type":"done","label":"bug","sources":[...]}\n\n
+api/app/
+├── api/routes/      HTTP only — FastAPI routers, request/response models
+│                    No SQLAlchemy. No Redis. No external HTTP.
+│
+├── services/        Business logic, transaction boundaries, cache ops
+│                    Calls repositories for SQL and infra for adapters.
+│
+├── repositories/    SQL only — raw SELECT/INSERT via SQLAlchemy text()
+│                    No HTTP errors. No cache invalidation.
+│
+├── domain/          Pydantic models (input/output shapes)
+│                    Distinct from SQLAlchemy ORM models in infra/db/
+│
+└── infra/           Adapters — one file per external system
+    ├── vault.py         fetch_vault_secrets()
+    ├── openai_client.py embed_texts(), embed_one()
+    ├── redis_client.py  build_redis()
+    ├── minio_client.py  build_minio(), save_chunk_snapshot()
+    ├── modelserver_client.py classify(), ner(), summarize(), rerank()
+    ├── observability.py configure_logging(), get_logger(), bind_trace_id()
+    ├── redaction.py     redact()
+    ├── jwt_handler.py   create_token(), decode_token()
+    └── prompts.py       load_prompt(name)
 ```
 
 ---
 
-## RAG Pipeline Detail
+## Startup Sequence
+
+```
+vault ──healthy──► vault-init (one-shot: writes secrets)
+db   ──healthy──► langfuse-db-init (one-shot: creates langfuse_db)
+                  migrate (one-shot: alembic upgrade head → exits)
+minio──healthy──► minio-init (one-shot: creates buckets)
+
+                  modelserver ──healthy──►
+                  (loads DistilBERT + LR weights from MinIO, verifies SHA-256)
+
+                  api ──── refuses to boot if ANY of:
+                    ✗ eval_thresholds.yaml missing or any threshold = 0
+                    ✗ Vault unreachable
+                    ✗ modelserver unhealthy
+                    ✗ modelserver in mock mode (REQUIRE_REAL_MODELSERVER=true)
+                    ✗ Langfuse auth_check() fails
+
+chatbot / widget / host start after api is healthy.
+```
+
+---
+
+## Full Request Flow — One User Message
+
+```
+POST /chat/stream  {conversation_id, message}   Bearer JWT
+        │
+        ├─ 1. JWT decode → user_id, role         [infra/jwt_handler.py]
+        │
+        ├─ 2. Redis GET conversation:{id}         [services/chat_service.py]
+        │      → message history (last N turns)
+        │      TTL: 86,400 s (24 h)
+        │
+        ├─ 3. pgvector recall long-term memories  [repositories/memory_repo.py]
+        │      → top-3 episodic memories by cosine similarity
+        │      (semantic search on user's stored memories)
+        │
+        ├─ 4. Build prompt                        [infra/prompts.py]
+        │      system.md + memories + history + user message
+        │
+        ├─ 5. LLM loop (max 5 iterations)         [services/chat_service.py]
+        │      GPT-4o-mini, tool_choice="auto"
+        │
+        │      ── tool call: classify_issue ──────────────────────────────┐
+        │      │   redact(inputs)                                         │
+        │      │   POST modelserver:8001/classify                         │
+        │      │   → {label, confidence}                                  │
+        │      │   redact(outputs)                                        │
+        │      │   Langfuse span: tool=classify_issue, latency, tokens   ◄┘
+        │
+        │      ── tool call: rag_search ───────────────────────────────────┐
+        │      │   → rag_service.search()  [see RAG pipeline below]        │
+        │      │   Langfuse span: tool=rag_search                         ◄┘
+        │
+        │      ── tool call: write_memory ─────────────────────────────────┐
+        │      │   embed(text) → pgvector INSERT into memories             │
+        │      │   audit_log INSERT: actor=user_id, action=write_memory   ◄┘
+        │
+        ├─ 6. Stream final response (SSE)
+        │      data: {"type": "token", "content": "..."}
+        │      data: {"type": "done", "label": "...", "sources": [...]}
+        │
+        └─ 7. Persist (try/finally — runs even on client disconnect)
+               Redis SET conversation:{id} updated_history  TTL=86400s
+               Postgres INSERT messages (user + assistant)
+               db.commit()
+               Langfuse flush trace
+```
+
+---
+
+## RAG Pipeline
 
 ```
 User query
-  │
-  ├─ HyDE transform (prompts/hyde.md)
-  │    LLM generates hypothetical resolved-issue passage
-  │
-  ├─ Dual embedding
-  │    embed(query)        → vector_q
-  │    embed(hypothetical) → vector_h
-  │    search_vec = 0.5 × vector_q + 0.5 × vector_h
-  │
-  ├─ Hybrid retrieval (single SQL)
-  │    SELECT id, text,
-  │      (0.6 * (1 - embedding <-> search_vec) +
-  │       0.4 * ts_rank(search_vector, plainto_tsquery(query))) AS score
-  │    FROM chunks
-  │    WHERE label = $current_label OR source = 'docs'
-  │    ORDER BY score DESC LIMIT 20;
-  │
-  ├─ Cross-encoder rerank (ms-marco-MiniLM-L-6-v2)
-  │    Score each (query, chunk_text) pair → sort → top 5
-  │
-  └─ Return parent chunks (1024 tokens) to LLM context
-       Child chunks (256 tokens) were used for retrieval precision
+    │
+    ├─ embed_one(query)                     text-embedding-3-small, 1536 dims
+    │
+    ├─ HyDE: GPT-4o-mini generates a        [hyde.md prompt]
+    │   hypothetical answer to the query
+    │   → embed_one(hypothetical_answer)
+    │
+    ├─ combined_vec = (query_vec + hyp_vec) / 2.0
+    │
+    ├─ hybrid_search(combined_vec, query_text, top_k=20)
+    │      ┌─ dense: pgvector cosine sim on child chunks (embedding IS NOT NULL)
+    │      │         ORDER BY embedding <=> combined_vec LIMIT 20
+    │      └─ sparse: ts_rank(search_vector, plainto_tsquery(query_text))
+    │         score = 0.6 × dense + 0.4 × sparse
+    │         metadata filter: label=req.label, source=req.source (optional)
+    │
+    ├─ for each candidate: fetch parent_text from chunks WHERE id=parent_id
+    │   (parent: 1024 tokens — passed to LLM as context)
+    │   (child: 256 tokens  — was used for retrieval)
+    │
+    ├─ POST modelserver:8001/rerank         cross-encoder/ms-marco-MiniLM-L-6-v2
+    │   → scores for all 20 candidates
+    │   → sort descending, take top_k (default 5)
+    │
+    ├─ save_chunk_snapshot(minio, conversation_id, top_k_chunks)
+    │   bucket: chunk-snapshots
+    │   (last N conversations retrievable for debugging)
+    │
+    └─ return list[ChunkResult] to caller
 ```
 
 ---
 
-## Chunking Schema
+## Deep Learning Track — Model Server
 
-```sql
-chunks (
-    id          UUID PRIMARY KEY,
-    parent_id   UUID REFERENCES chunks(id),   -- NULL for parent chunks
-    text        TEXT NOT NULL,
-    embedding   vector(1536),                 -- text-embedding-3-small
-    search_vector tsvector GENERATED ALWAYS AS (to_tsvector('english', text)) STORED,
-    source      TEXT,                         -- 'docs' | issue URL
-    issue_id    TEXT,
-    label       TEXT,                         -- collection label
-    is_parent   BOOLEAN DEFAULT false,
-    created_at  TIMESTAMPTZ DEFAULT now()
-)
--- Indexes:
-CREATE INDEX ON chunks USING hnsw (embedding vector_cosine_ops) WITH (m=16, ef_construction=64);
-CREATE INDEX ON chunks USING GIN(search_vector);
+```
+modelserver:8001 (FastAPI)
+    │
+    ├─ POST /classify  {text}
+    │      DistilBERT fine-tuned 4-class (distilbert-base-uncased)
+    │      Frozen: embedding + layers 0–3
+    │      Trainable: layers 4–5 + pre-classifier + head
+    │      → {label, confidence}
+    │
+    ├─ POST /classify/classical  {text}
+    │      TF-IDF (max 50K features, ngram 1–2) + Logistic Regression
+    │      → {label, confidence}
+    │
+    ├─ POST /ner  {text}
+    │      spaCy en_core_web_sm + EntityRuler
+    │      Patterns: Python package names, error types, function names
+    │      → {entities: [{text, label, start, end}]}
+    │
+    ├─ POST /summarize  {text}
+    │      GPT-4o-mini + summarize.md prompt
+    │      → {summary}
+    │
+    └─ POST /rerank  {query, passages: [str]}
+           cross-encoder/ms-marco-MiniLM-L-6-v2
+           → {scores: [float]}
+
+Boot sequence:
+    MinIO models bucket → download_and_verify()
+    → SHA-256 check vs model_card.json
+    → WeightsNotFound → start in mock mode (REQUIRE_REAL_MODELSERVER=false to allow)
+    → SHA mismatch → RuntimeError (hard fail, refuse to boot)
 ```
 
 ---
 
-## Long-term Memory
+## Authentication Flow
 
-```sql
-long_term_memories (
-    id         UUID PRIMARY KEY,
-    user_id    UUID REFERENCES users(id),
-    summary    TEXT NOT NULL,
-    embedding  vector(1536),
-    created_at TIMESTAMPTZ DEFAULT now()
-)
 ```
+POST /auth/register  {email, password}
+    → bcrypt hash, INSERT users, return access_token
 
-- Written only when `write_memory` tool is called (explicit user instruction)
-- Retrieved at turn start: top-3 by cosine similarity to current issue text
-- Injected into system prompt: `{memories}` placeholder
+POST /auth/login  {email, password}
+    → bcrypt verify, JWT signed with secret from Vault
+    → access_token (HS256, 24 h expiry)
+
+JWT payload: {sub: user_id, role: "user"|"admin", exp}
+
+Protected routes: Depends(get_current_user)
+    → decode JWT → user_id, role
+    → role check inline (admin endpoints: require_admin dep)
+
+Admin-only:
+    POST /admin/invite        create user with specified role
+    GET  /admin/audit-log     return audit_log rows
+    POST /widgets             create widget config
+    DELETE /widgets/{id}      delete widget
+```
 
 ---
 
 ## Widget Embed Flow
 
 ```
-host page (3001)
-  └─ <script src="http://localhost:8000/widget.js" data-widget-id="UUID">
-        │
-        ├─ loader injects <iframe src="http://localhost:5173/?widget_id=UUID&api_url=http://localhost:8000">
-        │
-        └─ iframe (widget:5173 nginx) serves widget/index.html
-              ├─ GET /widget-config/{UUID} → applies runtime theme (CSS vars, position)
-              ├─ POST /auth/login → JWT stored in sessionStorage
-              ├─ POST /conversations → creates conversation
-              └─ POST /chat/stream → SSE streaming
-                    └─ postMessage({type:"copilot-resize", widgetId, height}, "*") to host
+Host page (host:3001/index.html):
+    <script>
+      (async () => {
+        const { id } = await fetch('http://localhost:8000/widget-default').then(r=>r.json());
+        const s = document.createElement('script');
+        s.src = 'http://localhost:8000/widget.js';
+        s.dataset.widgetId = id;
+        document.body.appendChild(s);
+      })();
+    </script>
+
+/widget.js (loader):
+    reads data-widget-id from document.currentScript
+    injects: <iframe src="http://localhost:5173/?widget_id=<id>&api_url=<api>">
+    style: fixed bottom-right, 400×80px, transitions to 400×600px when open
+    listens: window.message { type:'copilot-resize' } → iframe.style.height
+
+widget:5173/index.html (vanilla JS, ~20 KB raw, ~6 KB gzip):
+    GET /widget-config/{widget_id}
+        → reads {theme, greeting, enabled_tools}
+        → applies CSS custom properties for primary_color
+        → applies position (bottom-left / bottom-right)
+    Login view → POST /auth/login → JWT stored in sessionStorage
+    Chat view  → POST /conversations → POST /chat/stream (SSE)
+    postMessage copilot-resize to parent on panel open/close
+
+Security:
+    GET /widget-config/{id} checks Origin header vs allowed_origins in DB
+    CSP frame-ancestors header = allowed_origins (browser blocks unauthorized parents)
+    CORS _cors_origins = env var list ∪ all widget allowed_origins (loaded at startup)
 ```
-
----
-
-## Secrets Management
-
-All runtime secrets live in Vault at `secret/data/copilot`. The `.env` file holds only bootstrap variables (`VAULT_ADDR`, `VAULT_TOKEN`) — never actual secrets.
-
-```
-Vault path: secret/data/copilot
-  openai_api_key        ← GPT-4o-mini + text-embedding-3-small
-  db_password           ← PostgreSQL
-  minio_secret_key      ← MinIO object store
-  langfuse_public_key   ← Langfuse tracing
-  langfuse_secret_key   ← Langfuse tracing
-```
-
-The `vault-init` one-shot container writes secrets from `.env` into Vault on first boot. The API reads them via `app/infra/vault.py` at startup.
 
 ---
 
 ## Observability
 
-- **Tracing:** Langfuse (self-hosted on :3000). Every request gets a parent trace. Each LLM iteration is a `generation` child span. Each tool call is a `span` child.
-- **Structured logging:** structlog JSON to stdout. Every log line carries `trace_id` (bound by `TraceIDMiddleware`) and passes through `_redacting_processor` before emission.
-- **Metrics:** Exposed at `GET /health` (liveness). Token counts and latency logged per request.
+```
+Every request:
+    TraceIDMiddleware → binds trace_id (UUID4) to structlog context
+    → X-Trace-ID response header
+    → every log line includes trace_id field
+
+Langfuse trace tree per conversation:
+    root span: user_message (conversation_id, user_id)
+    ├─ span: llm_call (model=gpt-4o-mini, prompt_tokens, completion_tokens, latency)
+    ├─ span: tool_call (tool=classify_issue, inputs_redacted, outputs_redacted, latency)
+    ├─ span: rag_search (query, n_chunks, top_score, latency)
+    └─ span: tool_call (tool=write_memory, actor, latency)
+
+Structured logging (structlog JSON):
+    every log line: {event, trace_id, timestamp, level, module}
+    redaction runs before any log write or span attribute set
+
+Redaction patterns (SECURITY.md for full list):
+    OpenAI keys (sk-...), GitHub tokens (ghp_...), emails, IPv4 addresses
+```
 
 ---
 
-## Key Design Decisions
+## Exception Hierarchy
 
-| Decision | Choice | Primary reason |
-|---|---|---|
-| LLM | GPT-4o-mini | Best tool-calling at $0.15/1M tokens |
-| Embeddings | text-embedding-3-small | MTEB 62.3, same API key, $0.05 corpus cost |
-| Vector store | pgvector HNSW | Already in stack, hybrid retrieval in one SQL |
-| Sparse retrieval | PostgreSQL FTS | Same DB, GIN index, no extra service |
-| Reranker | ms-marco-MiniLM-L-6-v2 | Single biggest RAG quality improvement |
-| Query transform | HyDE 50/50 | Closes query/answer vector gap |
-| Chunking | Hierarchical 256/1024 | Sharp embeddings + rich LLM context |
-| Classifier | DistilBERT fine-tune | 0.8867 macro-F1, zero per-call cost |
-| Tracing | Langfuse | LLM-native spans, no extra container (self-hosted) |
-| Memory | Semantic pgvector | Cross-session fact recall, demonstrable in demo |
+```
+AppError (base, HTTP 500)
+├── NotFoundError     → 404
+├── PermissionDenied  → 403
+├── ConflictError     → 409
+└── ToolFailure       → 422
 
-Full justifications: see [DECISIONS.md](resources/DECISIONS.md).
+Single handler at API boundary:
+    @app.exception_handler(AppError)
+    → JSONResponse {error: code, message: str, request_id: UUID}
+    No stack trace in response.
+
+Tool failure recovery in chat_service.py:
+    except ToolFailure as exc:
+        tool_result = f"Tool failed: {exc}. Continuing without this result."
+    LLM receives the failure message and continues — does not 500.
+
+Uncaught exception handler:
+    @app.exception_handler(Exception)
+    → 500, {error: "internal_error", request_id: UUID}
+    → logger.exception() with trace_id (stack trace in logs, not in response)
+```

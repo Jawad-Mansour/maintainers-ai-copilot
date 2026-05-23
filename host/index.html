@@ -3,74 +3,598 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>pandas-dev/pandas — Issue Tracker Demo</title>
+  <title>Issues · pandas-dev/pandas</title>
   <style>
-    body { font-family: system-ui, -apple-system, sans-serif; max-width: 900px; margin: 0 auto; padding: 2rem 1rem; color: #1a202c; }
-    h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: 0.25rem; }
-    .subtitle { color: #718096; margin-bottom: 2rem; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-    th { text-align: left; padding: 8px 12px; border-bottom: 2px solid #e2e8f0; color: #4a5568; font-weight: 600; }
-    td { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; }
-    tr:hover td { background: #f7fafc; }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
-    .bug { background: #fed7d7; color: #c53030; }
-    .feature { background: #c6f6d5; color: #276749; }
-    .docs { background: #bee3f8; color: #2b6cb0; }
-    .question { background: #fefcbf; color: #744210; }
-    a { color: #6366f1; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .widget-note { margin-top: 3rem; padding: 1rem; background: #f0f4ff; border-radius: 8px; font-size: 0.85rem; color: #4a5568; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #238636;
+      --accent-hover: #2ea043;
+      --link: #58a6ff;
+      --link-hover: #79c0ff;
+      --label-bug: #da3633;
+      --label-feature: #238636;
+      --label-docs: #1f6feb;
+      --label-question: #8957e5;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* ── Top Nav ─────────────────────────── */
+    .nav {
+      background: #010409;
+      border-bottom: 1px solid var(--border);
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      height: 62px;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .nav-logo svg { fill: var(--text); width: 32px; height: 32px; }
+    .nav-search {
+      flex: 1;
+      max-width: 272px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 12px;
+      color: var(--muted);
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .nav-links { display: flex; gap: 4px; margin-left: auto; }
+    .nav-links a {
+      color: var(--text);
+      text-decoration: none;
+      padding: 5px 8px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .nav-links a:hover { background: rgba(177,186,196,.12); }
+    .nav-avatar {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, #6e40c9, #1f6feb);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      color: white; font-weight: 700; font-size: 13px;
+      flex-shrink: 0;
+    }
+
+    /* ── Repo Header ─────────────────────── */
+    .repo-header {
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .repo-header-inner {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 16px 24px 0;
+    }
+    .repo-breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 20px;
+      font-weight: 400;
+      margin-bottom: 16px;
+    }
+    .repo-breadcrumb svg { fill: var(--muted); width: 16px; height: 16px; flex-shrink: 0; }
+    .repo-breadcrumb a { color: var(--link); text-decoration: none; }
+    .repo-breadcrumb a:hover { text-decoration: underline; }
+    .repo-breadcrumb span { color: var(--muted); }
+    .repo-breadcrumb strong { color: var(--text); }
+    .repo-tabs {
+      display: flex;
+      gap: 0;
+      margin-top: 8px;
+      overflow-x: auto;
+    }
+    .repo-tab {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 14px;
+      border-bottom: 2px solid transparent;
+      white-space: nowrap;
+    }
+    .repo-tab:hover { color: var(--text); border-bottom-color: #f78166; }
+    .repo-tab.active { color: var(--text); border-bottom-color: #f78166; font-weight: 600; }
+    .repo-tab .count {
+      background: rgba(139,148,158,.2);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 2px 6px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .repo-tab.active .count { background: var(--text); color: var(--bg); }
+
+    /* ── Main Layout ─────────────────────── */
+    .main {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 24px;
+      display: grid;
+      grid-template-columns: 1fr 296px;
+      gap: 24px;
+      align-items: start;
+    }
+    @media (max-width: 768px) {
+      .main { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+    }
+
+    /* ── Issues Panel ────────────────────── */
+    .issues-panel { min-width: 0; }
+    .issues-toolbar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      align-items: center;
+    }
+    .search-box {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 12px;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+    }
+    .search-box:focus { border-color: var(--link); box-shadow: 0 0 0 3px rgba(31,111,235,.3); }
+    .btn {
+      background: var(--accent);
+      color: white;
+      border: 1px solid rgba(240,246,252,.1);
+      border-radius: 6px;
+      padding: 5px 16px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .btn:hover { background: var(--accent-hover); }
+
+    .issues-box {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .issues-box-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 14px;
+    }
+    .issues-count-open { font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 6px; }
+    .issues-count-closed { color: var(--muted); }
+    .issues-count-open svg, .issues-count-closed svg { width: 16px; height: 16px; }
+
+    .issue-row {
+      border-bottom: 1px solid var(--border);
+      padding: 10px 16px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      transition: background .1s;
+    }
+    .issue-row:last-child { border-bottom: none; }
+    .issue-row:hover { background: var(--surface); }
+
+    .issue-icon { flex-shrink: 0; margin-top: 2px; }
+    .issue-icon svg { width: 16px; height: 16px; fill: var(--accent-hover); }
+    .issue-icon.closed svg { fill: #8957e5; }
+
+    .issue-body { flex: 1; min-width: 0; }
+    .issue-title {
+      font-weight: 600;
+      color: var(--text);
+      font-size: 14px;
+      margin-bottom: 4px;
+      cursor: pointer;
+    }
+    .issue-title:hover { color: var(--link); }
+    .issue-meta {
+      color: var(--muted);
+      font-size: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .label {
+      display: inline-flex;
+      align-items: center;
+      padding: 0 7px;
+      height: 20px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .label-bug { background: rgba(218,54,51,.15); color: #f85149; border: 1px solid rgba(218,54,51,.4); }
+    .label-feature { background: rgba(35,134,54,.15); color: #3fb950; border: 1px solid rgba(35,134,54,.4); }
+    .label-docs { background: rgba(31,111,235,.15); color: #58a6ff; border: 1px solid rgba(31,111,235,.4); }
+    .label-question { background: rgba(137,87,229,.15); color: #bc8cff; border: 1px solid rgba(137,87,229,.4); }
+    .label-enhancement { background: rgba(0,117,202,.15); color: #58a6ff; border: 1px solid rgba(0,117,202,.4); }
+    .label-perf { background: rgba(184,93,55,.15); color: #e3b341; border: 1px solid rgba(184,93,55,.4); }
+
+    .issue-comments {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      padding-top: 2px;
+    }
+    .issue-comments svg { width: 14px; height: 14px; fill: var(--muted); }
+
+    /* ── Sidebar ─────────────────────────── */
+    .sidebar { font-size: 14px; }
+    .sidebar-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .sidebar-card h3 {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: var(--muted);
+      padding: 12px 16px 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-body { padding: 12px 16px; }
+    .stat-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .stat-row:last-child { border-bottom: none; }
+    .stat-row strong { color: var(--text); }
+    .stat-row .dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .lang-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0;
+      font-size: 13px;
+    }
+    .copilot-card {
+      background: linear-gradient(135deg, rgba(99,102,241,.15), rgba(139,92,246,.1));
+      border: 1px solid rgba(99,102,241,.4);
+      border-radius: 8px;
+      padding: 16px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .copilot-card h3 {
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .copilot-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(99,102,241,.2);
+      color: #a5b4fc;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
   </style>
 </head>
 <body>
-  <h1>pandas-dev/pandas — Issue Tracker</h1>
-  <p class="subtitle">Demo host page. The Maintainer's Copilot widget is embedded in the bottom-right corner.</p>
 
-  <table>
-    <thead>
-      <tr><th>#</th><th>Title</th><th>Label</th><th>Opened</th></tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><a href="#">61420</a></td>
-        <td>ENH: Add smart_groupby() for automatic grouping by categorical columns</td>
-        <td><span class="badge feature">feature</span></td>
-        <td>2024-01-15</td>
-      </tr>
-      <tr>
-        <td><a href="#">24333</a></td>
-        <td>DataFrame.groupby() terribly slow when grouping by multiple columns with Categorical</td>
-        <td><span class="badge bug">bug</span></td>
-        <td>2023-11-03</td>
-      </tr>
-      <tr>
-        <td><a href="#">25112</a></td>
-        <td>Fix validation error type SS05 and check in CI</td>
-        <td><span class="badge docs">docs</span></td>
-        <td>2023-09-28</td>
-      </tr>
-      <tr>
-        <td><a href="#">61350</a></td>
-        <td>How to use dropna=False with groupby in pandas 1.1?</td>
-        <td><span class="badge question">question</span></td>
-        <td>2024-01-10</td>
-      </tr>
-      <tr>
-        <td><a href="#">61300</a></td>
-        <td>SettingWithCopyWarning raised unexpectedly after .loc assignment</td>
-        <td><span class="badge bug">bug</span></td>
-        <td>2024-01-08</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <div class="widget-note">
-    The Copilot widget is embedded via a single <code>&lt;script&gt;</code> tag below.
-    It loads from the API's <code>/widget.js</code> loader and runs inside an iframe.
-    Open browser DevTools &rarr; Console to see postMessage resize events.
+<!-- ── Navigation ─────────────────────────────────────────────────────────── -->
+<nav class="nav">
+  <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+    <div style="width:32px;height:32px;background:linear-gradient(135deg,#6366f1,#4f46e5);border-radius:8px;display:flex;align-items:center;justify-content:center">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="white"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+    </div>
+    <span style="color:#e6edf3;font-weight:700;font-size:15px;letter-spacing:-.01em">Copilot Hub</span>
   </div>
 
-  <!-- Widget embed — one script tag, no other dependencies -->
-  <script src="http://localhost:8000/widget.js" data-widget-id="WIDGET_ID_PLACEHOLDER"></script>
+  <div class="nav-search">
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" style="opacity:.5">
+      <path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/>
+    </svg>
+    Type / to search
+  </div>
+
+  <div class="nav-links">
+    <a href="#">Pull requests</a>
+    <a href="#">Issues</a>
+    <a href="#">Marketplace</a>
+    <a href="#">Explore</a>
+  </div>
+
+  <div class="nav-avatar">M</div>
+</nav>
+
+<!-- ── Repo Header ──────────────────────────────────────────────────────────── -->
+<div class="repo-header">
+  <div class="repo-header-inner">
+    <div class="repo-breadcrumb">
+      <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="var(--muted)" style="width:16px;height:16px;flex-shrink:0">
+        <path d="M1.75 1h12.5c.966 0 1.75.784 1.75 1.75v9.5A1.75 1.75 0 0 1 14.25 14H1.75A1.75 1.75 0 0 1 0 12.25v-9.5C0 1.784.784 1 1.75 1ZM1.5 2.75v9.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25H1.75a.25.25 0 0 0-.25.25ZM3 7.25h2.5a.75.75 0 0 1 0 1.5H3a.75.75 0 0 1 0-1.5Zm0-2.5h5.5a.75.75 0 0 1 0 1.5H3a.75.75 0 0 1 0-1.5Z"/>
+      </svg>
+      <a href="#">pandas-dev</a>
+      <span>/</span>
+      <strong>pandas</strong>
+      <span style="background:rgba(139,148,158,.2);color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:2px 8px;font-size:12px;font-weight:600">Open Source</span>
+    </div>
+
+    <div class="repo-tabs">
+      <a href="#" class="repo-tab">
+        <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M4.72 3.22a.75.75 0 0 1 1.06 1.06L2.06 8l3.72 3.72a.75.75 0 1 1-1.06 1.06L.47 8.53a.75.75 0 0 1 0-1.06Zm6.56 0a.75.75 0 1 0-1.06 1.06L13.94 8l-3.72 3.72a.75.75 0 1 0 1.06 1.06l4.25-4.25a.75.75 0 0 0 0-1.06Z"/></svg>
+        Code
+      </a>
+      <a href="#" class="repo-tab active">
+        <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"/></svg>
+        Issues
+        <span class="count">2,847</span>
+      </a>
+      <a href="#" class="repo-tab">
+        <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354Z"/></svg>
+        Pull requests
+        <span class="count">142</span>
+      </a>
+      <a href="#" class="repo-tab">
+        <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25Z"/></svg>
+        Discussions
+      </a>
+      <a href="#" class="repo-tab">
+        <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"/><path d="m9.427 10.927.849-3.399A1.5 1.5 0 0 0 8.5 5.75H8a.75.75 0 0 0 0 1.5h.5l-.83 3.322a1.5 1.5 0 0 0 1.757 1.855Zm.823-7.677a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"/></svg>
+        Actions
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- ── Main Content ─────────────────────────────────────────────────────────── -->
+<div class="main">
+
+  <!-- Issues Panel -->
+  <div class="issues-panel">
+    <div class="issues-toolbar">
+      <input class="search-box" type="text" placeholder="&nbsp;🔍&nbsp; is:issue is:open" value="is:issue is:open" readonly />
+      <a href="#" class="btn">
+        <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/></svg>
+        New issue
+      </a>
+    </div>
+
+    <div class="issues-box">
+      <div class="issues-box-header">
+        <div class="issues-count-open">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"/></svg>
+          2,847 Open
+        </div>
+        <div class="issues-count-closed">✓ 14,203 Closed</div>
+        <div style="margin-left:auto;display:flex;gap:16px;color:var(--muted)">
+          <span style="cursor:pointer">Label ▾</span>
+          <span style="cursor:pointer">Milestone ▾</span>
+          <span style="cursor:pointer">Assignee ▾</span>
+          <span style="cursor:pointer">Sort ▾</span>
+        </div>
+      </div>
+
+      <!-- Issue rows — real issues from data/rag_corpus.jsonl (pandas-dev/pandas) -->
+      <div class="issue-row">
+        <div class="issue-icon"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"/></svg></div>
+        <div class="issue-body">
+          <div class="issue-title">BUG: groupby cumprod/cummin/cummax returns Float64 for nullable integers when group key contains NA</div>
+          <div class="issue-meta">
+            <span class="label label-bug">bug</span>
+            &nbsp;#65550 opened 3 days ago by <a href="https://github.com/pandas-dev/pandas/issues/65550" target="_blank" style="color:var(--link)">rhshadrach</a>
+          </div>
+        </div>
+        <div class="issue-comments"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.75C1 1.784 1.784 1 2.75 1h10.5c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0 1 13.25 12H9.06l-2.573 2.573A1.458 1.458 0 0 1 4 13.543V12H2.75A1.75 1.75 0 0 1 1 10.25Z"/></svg> 6</div>
+      </div>
+
+      <div class="issue-row">
+        <div class="issue-icon"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"/></svg></div>
+        <div class="issue-body">
+          <div class="issue-title">ENH: Improve missing column KeyError message in DataFrame access</div>
+          <div class="issue-meta">
+            <span class="label label-feature">enhancement</span>
+            &nbsp;#65553 opened 3 days ago by <a href="https://github.com/pandas-dev/pandas/issues/65553" target="_blank" style="color:var(--link)">mroeschke</a>
+          </div>
+        </div>
+        <div class="issue-comments"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.75C1 1.784 1.784 1 2.75 1h10.5c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0 1 13.25 12H9.06l-2.573 2.573A1.458 1.458 0 0 1 4 13.543V12H2.75A1.75 1.75 0 0 1 1 10.25Z"/></svg> 4</div>
+      </div>
+
+      <div class="issue-row">
+        <div class="issue-icon"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"/></svg></div>
+        <div class="issue-body">
+          <div class="issue-title">BUG: DataFrame.groupby() terribly slow when grouping by multiple columns and one is Categorical</div>
+          <div class="issue-meta">
+            <span class="label label-bug">bug</span>
+            <span class="label label-perf">performance</span>
+            &nbsp;#24333 opened 6 months ago by <a href="https://github.com/pandas-dev/pandas/issues/24333" target="_blank" style="color:var(--link)">jreback</a>
+          </div>
+        </div>
+        <div class="issue-comments"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.75C1 1.784 1.784 1 2.75 1h10.5c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0 1 13.25 12H9.06l-2.573 2.573A1.458 1.458 0 0 1 4 13.543V12H2.75A1.75 1.75 0 0 1 1 10.25Z"/></svg> 47</div>
+      </div>
+
+      <div class="issue-row">
+        <div class="issue-icon"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"/></svg></div>
+        <div class="issue-body">
+          <div class="issue-title">ENH: Add smart_groupby() method for automatic grouping by categorical columns</div>
+          <div class="issue-meta">
+            <span class="label label-feature">enhancement</span>
+            &nbsp;#61420 opened 7 days ago by <a href="https://github.com/pandas-dev/pandas/issues/61420" target="_blank" style="color:var(--link)">topper-harley</a>
+          </div>
+        </div>
+        <div class="issue-comments"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.75C1 1.784 1.784 1 2.75 1h10.5c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0 1 13.25 12H9.06l-2.573 2.573A1.458 1.458 0 0 1 4 13.543V12H2.75A1.75 1.75 0 0 1 1 10.25Z"/></svg> 8</div>
+      </div>
+
+      <div class="issue-row">
+        <div class="issue-icon"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"/></svg></div>
+        <div class="issue-body">
+          <div class="issue-title">BUG: DataFrame/Series.rename silently downcasts nullable index dtypes to NumPy dtypes</div>
+          <div class="issue-meta">
+            <span class="label label-bug">bug</span>
+            &nbsp;#65315 opened 14 days ago by <a href="https://github.com/pandas-dev/pandas/issues/65315" target="_blank" style="color:var(--link)">phofl</a>
+          </div>
+        </div>
+        <div class="issue-comments"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.75C1 1.784 1.784 1 2.75 1h10.5c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0 1 13.25 12H9.06l-2.573 2.573A1.458 1.458 0 0 1 4 13.543V12H2.75A1.75 1.75 0 0 1 1 10.25Z"/></svg> 11</div>
+      </div>
+
+      <div class="issue-row">
+        <div class="issue-icon"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"/></svg></div>
+        <div class="issue-body">
+          <div class="issue-title">DOC: Fix validation error type SS05 and check in CI for docstring consistency</div>
+          <div class="issue-meta">
+            <span class="label label-docs">documentation</span>
+            <span class="label label-docs">good first issue</span>
+            &nbsp;#25112 opened 5 months ago by <a href="https://github.com/pandas-dev/pandas/issues/25112" target="_blank" style="color:var(--link)">datapythonista</a>
+          </div>
+        </div>
+        <div class="issue-comments"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.75C1 1.784 1.784 1 2.75 1h10.5c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0 1 13.25 12H9.06l-2.573 2.573A1.458 1.458 0 0 1 4 13.543V12H2.75A1.75 1.75 0 0 1 1 10.25Z"/></svg> 2</div>
+      </div>
+
+      <div class="issue-row">
+        <div class="issue-icon"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"/></svg></div>
+        <div class="issue-body">
+          <div class="issue-title">BUG: GroupBy.any()/all() on NumPy bool columns return NaN for empty groups and upcast to float</div>
+          <div class="issue-meta">
+            <span class="label label-bug">bug</span>
+            &nbsp;#65100 opened 22 days ago by <a href="https://github.com/pandas-dev/pandas/issues/65100" target="_blank" style="color:var(--link)">twoertwein</a>
+          </div>
+        </div>
+        <div class="issue-comments"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.75C1 1.784 1.784 1 2.75 1h10.5c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0 1 13.25 12H9.06l-2.573 2.573A1.458 1.458 0 0 1 4 13.543V12H2.75A1.75 1.75 0 0 1 1 10.25Z"/></svg> 9</div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;color:var(--muted);font-size:12px;text-align:center;padding:8px">
+      Showing 7 of 14,582 indexed issues &nbsp;·&nbsp; <span style="color:var(--link);cursor:pointer">Ask the Copilot to search →</span>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="copilot-card">
+      <h3>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="#a5b4fc"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+        Maintainer's Copilot
+        <span class="copilot-pill">Active</span>
+      </h3>
+      AI-powered assistant embedded in this page. Click the <strong style="color:#a5b4fc">purple bubble</strong> (bottom-right) to open. It can classify issues, search the knowledge base, and answer questions about pandas.
+    </div>
+
+    <div class="sidebar-card" style="margin-top:16px">
+      <h3>About</h3>
+      <div class="sidebar-body" style="font-size:13px;color:var(--muted);line-height:1.6">
+        Flexible and powerful data analysis / manipulation library for Python, providing labeled data structures similar to R data.frame objects, statistical functions, and much more.
+        <br/><br/>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="var(--muted)"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>
+            41.2k stars
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="var(--muted)"><path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75v-.878a2.25 2.25 0 1 1 1.5 0v.878a2.25 2.25 0 0 1-2.25 2.25h-1.5v2.128a2.251 2.251 0 1 1-1.5 0V8.5h-1.5A2.25 2.25 0 0 1 3.5 6.25v-.878a2.25 2.25 0 1 1 1.5 0ZM5 3.25a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Zm6.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm-3 8.75a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Z"/></svg>
+            17.5k forks
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="var(--muted)"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"/></svg>
+            2,847 open issues
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-card">
+      <h3>Languages</h3>
+      <div class="sidebar-body">
+        <div style="height:8px;border-radius:6px;overflow:hidden;display:flex;margin-bottom:12px">
+          <div style="background:#3572A5;width:52%"></div>
+          <div style="background:#e34c26;width:24%"></div>
+          <div style="background:#89e051;width:12%"></div>
+          <div style="background:#f1e05a;width:8%"></div>
+          <div style="background:#555;width:4%"></div>
+        </div>
+        <div class="lang-row"><span class="dot" style="background:#3572A5"></span><span style="color:var(--text)">Python</span><span style="margin-left:auto;color:var(--muted)">52.0%</span></div>
+        <div class="lang-row"><span class="dot" style="background:#e34c26"></span><span style="color:var(--text)">Cython</span><span style="margin-left:auto;color:var(--muted)">24.3%</span></div>
+        <div class="lang-row"><span class="dot" style="background:#89e051"></span><span style="color:var(--text)">C</span><span style="margin-left:auto;color:var(--muted)">12.1%</span></div>
+        <div class="lang-row"><span class="dot" style="background:#f1e05a;"></span><span style="color:var(--text)">JavaScript</span><span style="margin-left:auto;color:var(--muted)">8.4%</span></div>
+        <div class="lang-row"><span class="dot" style="background:#555"></span><span style="color:var(--text)">Other</span><span style="margin-left:auto;color:var(--muted)">3.2%</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Widget embed — dynamically fetches the first active widget ID from the API -->
+<script>
+(async () => {
+  try {
+    const r = await fetch('http://localhost:8000/widget-default');
+    if (!r.ok) {
+      console.warn('[Copilot] No active widget found. Create one via the Admin panel first.');
+      return;
+    }
+    const { id } = await r.json();
+    const s = document.createElement('script');
+    s.src = 'http://localhost:8000/widget.js';
+    s.dataset.widgetId = id;
+    document.body.appendChild(s);
+  } catch (e) {
+    console.warn('[Copilot] Widget service unavailable:', e);
+  }
+})();
+</script>
 </body>
 </html>

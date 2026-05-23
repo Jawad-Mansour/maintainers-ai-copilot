@@ -52,3 +52,19 @@ async def update(db: AsyncSession, widget: Widget, **fields: object) -> Widget:
 async def delete(db: AsyncSession, widget: Widget) -> None:
     await db.delete(widget)
     await db.flush()
+
+
+async def get_all_allowed_origins(db: AsyncSession) -> list[str]:
+    result = await db.execute(select(Widget.allowed_origins))
+    origins: list[str] = []
+    for (row_origins,) in result.fetchall():
+        if row_origins:
+            origins.extend(row_origins)
+    return origins
+
+
+async def get_first_active(db: AsyncSession) -> Widget | None:
+    result = await db.execute(
+        select(Widget).where(Widget.is_active == True).order_by(Widget.created_at.asc()).limit(1)  # noqa: E712
+    )
+    return result.scalar_one_or_none()

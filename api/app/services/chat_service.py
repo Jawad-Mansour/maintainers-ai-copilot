@@ -68,7 +68,7 @@ async def _run_tool_loop(
     sources: list[str] = []
 
     for iteration in range(_MAX_TOOL_ITERS):
-        tool_choice: str | dict = "required" if iteration == 0 else "auto"
+        tool_choice: str = "auto"
         t0 = time.perf_counter()
         resp = await client.chat.completions.create(
             model="gpt-4o-mini",
@@ -275,35 +275,38 @@ async def stream_chat(
     reply_parts: list[str] = []
 
     async def _generate() -> AsyncGenerator[str, None]:
-        stream = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=messages,  # type: ignore[arg-type]
-            max_tokens=512,
-            temperature=0.3,
-            stream=True,
-        )
-        async for chunk in stream:
-            delta = chunk.choices[0].delta.content if chunk.choices else None
-            if delta:
-                reply_parts.append(delta)
-                yield f"data: {json.dumps({'type': 'token', 'content': delta})}\n\n"
+        try:
+            stream = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,  # type: ignore[arg-type]
+                max_tokens=512,
+                temperature=0.3,
+                stream=True,
+            )
+            async for chunk in stream:
+                delta = chunk.choices[0].delta.content if chunk.choices else None
+                if delta:
+                    reply_parts.append(delta)
+                    yield f"data: {json.dumps({'type': 'token', 'content': delta})}\n\n"
 
-        reply = "".join(reply_parts)
-        await message_repo.create(db, req.conversation_id, "user", req.message)
-        await message_repo.create(db, req.conversation_id, "assistant", reply)
+            done_payload = json.dumps(
+                {"type": "done", "label": label, "sources": list(set(sources))}
+            )
+            yield f"data: {done_payload}\n\n"
+        finally:
+            reply = "".join(reply_parts)
+            await message_repo.create(db, req.conversation_id, "user", req.message)
+            await message_repo.create(db, req.conversation_id, "assistant", reply)
 
-        new_history = history + [
-            {"role": "user", "content": req.message},
-            {"role": "assistant", "content": reply},
-        ]
-        await redis.set(
-            _HISTORY_KEY.format(req.conversation_id),
-            json.dumps(new_history),
-            ex=CONVERSATION_TTL,
-        )
-        await db.commit()
-
-        done_payload = json.dumps({"type": "done", "label": label, "sources": list(set(sources))})
-        yield f"data: {done_payload}\n\n"
+            new_history = history + [
+                {"role": "user", "content": req.message},
+                {"role": "assistant", "content": reply},
+            ]
+            await redis.set(
+                _HISTORY_KEY.format(req.conversation_id),
+                json.dumps(new_history),
+                ex=CONVERSATION_TTL,
+            )
+            await db.commit()
 
     return _generate()

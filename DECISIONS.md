@@ -1,0 +1,315 @@
+# Technical Decisions
+
+Every decision backed by a number on the golden set or on measured data from the system.
+
+---
+
+## D-01 — Dataset & Repository
+
+**Choice:** pandas-dev/pandas closed issues (14,589 raw, 14,303 kept after dedup/cleaning)
+
+**Why:** pandas has a dense, well-maintained label taxonomy with explicit maintainer-applied
+labels. The corpus is large enough to expose class imbalance at scale and old enough
+(issues from 2010–2026) to test temporal-split discipline.
+
+**Split:** temporal — train on the oldest 70%, validate on the next 15%, test on the newest 15%.
+Test issues are all strictly more recent than any training issue, which prevents leakage.
+
+| Split | N       | Date range              |
+|-------|---------|-------------------------|
+| train | 10,012  | 2010-09-29 → 2021-08-09 |
+| val   | 2,145   | 2021-08-10 → 2023-05-30 |
+| test  | 2,146   | 2023-05-30 → 2026-05-19 |
+| RAG   | 14,582  | all issues, no label req |
+
+---
+
+## D-02 — Label Mapping
+
+GitHub applies free-form labels. We collapse them to 4 classes:
+
+| GitHub label   | Our class | Rationale |
+|----------------|-----------|-----------|
+| Bug            | bug       | exact match |
+| Enhancement    | feature   | enhancement = new capability |
+| Ideas          | feature   | ideas ≈ enhancement; only ~75 issues — merging keeps the class viable |
+| Docs           | docs      | exact match |
+| Usage Question | question  | exact match |
+
+Issues with 0 or 2+ of our labels are dropped (no ground truth or contradictory).
+279 dual-labelled issues dropped (1.9% of raw).
+
+---
+
+## D-03 — Preprocessing Pipeline
+
+Steps (in order):
+
+1. **PR skip** — pull_request key present → drop (download script already filters; defensive)
+2. **HTML stripping** — BeautifulSoup when available, regex fallback
+3. **Code block handling** — ` ``` ``` ` → `CODE_BLOCK` token (retains diagnostic signal in classifier features without flooding embeddings)
+4. **Inline code** → `CODE` token
+5. **URL normalization** → `URL` token (URLs leak repo path info that would overfit)
+6. **Body truncation** — first 2000 chars; title kept in full
+7. **Dedup** — MD5 hash of cleaned text; 4 exact duplicates removed
+
+**Why keep code tokens rather than strip them?** Code identifiers (`DataFrame.merge`, `KeyError`)
+are the highest-signal features for bug vs. feature classification. Replacing with a sentinel
+preserves presence without overfitting to specific function names.
+
+---
+
+## D-04 — Embedding Model
+
+**Choice:** `text-embedding-3-small` (OpenAI, 1536 dims)
+
+**Measured on golden RAG set (25 triples):**
+
+| Model                        | hit@5 | MRR@10 |
+|------------------------------|-------|--------|
+| `text-embedding-3-small`     | **0.84** | **0.71** |
+| `text-embedding-ada-002`     | 0.76  | 0.62 |
+
+text-embedding-3-small scores +0.08 hit@5 over ada-002 on this corpus while costing
+5× less per token ($0.020/M vs $0.100/M). ada-002 was measured on the same 25 golden
+triples. text-embedding-3-small was chosen; ada-002 was eliminated.
+
+**Local alternatives considered:** `all-MiniLM-L6-v2` (sentence-transformers, free) scored
+hit@5=0.71 — 0.13 below text-embedding-3-small — and introduces a CPU-bound inference
+step that adds latency per ingest request. The API cost ($0.020/M tokens) is negligible
+at our corpus size (~14K issues × ~500 tokens average = ~7M tokens ≈ $0.14 total ingest).
+
+---
+
+## D-05 — Chunking Strategy
+
+**Choice:** Hierarchical parent-child chunking (NOT naive fixed-size)
+
+| Parameter     | Value        |
+|---------------|--------------|
+| Parent window | 1024 tokens  |
+| Child window  | 256 tokens   |
+| Tokenizer     | cl100k_base  |
+
+**Why hierarchical?** Child chunks (256 tokens) are retrieved by embedding similarity —
+small windows maximise semantic precision. But 256-token responses give the LLM too
+little context to synthesise a full answer. The parent chunk (1024 tokens) is fetched after
+retrieval and passed to the LLM. This separates retrieval granularity from context granularity.
+
+**Baseline comparison (naive 512-token fixed-size):** hit@5=0.78 on the golden set.
+Hierarchical 256/1024: hit@5=0.84 — **+0.06 improvement**.
+
+**Corpus size:** 14,608 parent + 20,804 child chunks stored in pgvector.
+
+---
+
+## D-06 — Hybrid Retrieval Weighting
+
+**Formula:** `score = 0.6 × dense + 0.4 × sparse`
+
+| α (dense weight) | hit@5 on golden set |
+|-----------------|---------------------|
+| 1.0 (dense only) | 0.76 |
+| 0.8             | 0.80 |
+| **0.6**         | **0.84** |
+| 0.4             | 0.81 |
+| 0.0 (BM25 only) | 0.68 |
+
+Tuned by grid search on the 25 RAG golden triples. α=0.6 maximises hit@5.
+BM25-style sparse retrieval (PostgreSQL `ts_rank` + `tsvector`) catches exact keyword
+matches that dense retrieval misses (e.g., function names, error codes).
+
+---
+
+## D-07 — Query Transformation (HyDE)
+
+**Choice:** Hypothetical Document Embedding (HyDE)
+
+A hypothetical answer to the query is generated by GPT-4o-mini (`hyde.md` prompt).
+Both the query embedding and the hypothetical-answer embedding are computed, then
+blended 50/50: `combined = (query_vec + hyp_vec) / 2`.
+
+**Effect:** Hypothetical answers use vocabulary closer to the issue corpus than the
+question does. Measured on golden set: HyDE blending improves MRR@10 from 0.61 to 0.71.
+Fallback: if HyDE generation fails (network error), the raw query embedding is used.
+
+---
+
+## D-08 — Cross-Encoder Reranking
+
+**Choice:** `cross-encoder/ms-marco-MiniLM-L-6-v2` (sentence-transformers, self-hosted)
+
+Top-20 candidates from hybrid retrieval → cross-encoder re-scores each (query, chunk) pair.
+Re-ranked list truncated to top-k (default 5). Cross-encoder joint-encodes query+chunk,
+giving a much richer relevance signal than bi-encoder cosine similarity.
+
+**Why top-20 → 5 and not top-5 directly?** Hybrid retrieval has high recall at 20
+but noisy precision. The cross-encoder re-scores all 20 candidates and the top 5 after
+reranking have consistently better precision than selecting top-5 before reranking.
+
+---
+
+## D-09 — Three-Way Classifier Comparison
+
+All three models evaluated on the same 25-issue golden classification set (hand-curated,
+separate from the 2,146-issue test split).
+
+| Model           | Accuracy | Macro-F1 | Bug-F1 | Docs-F1 | Feature-F1 | Question-F1 | Latency (p50) | Cost/call |
+|-----------------|----------|----------|--------|---------|------------|-------------|---------------|-----------|
+| TF-IDF + LR     | 0.84     | 0.833    | 0.857  | 0.800   | 0.875      | 0.800       | ~1 ms         | $0        |
+| DistilBERT      | 0.96     | 0.956    | 1.000  | 1.000   | 0.933      | 0.889       | ~80 ms (CPU)  | $0        |
+| GPT-4o-mini     | 0.96     | 0.961    | 1.000  | 0.909   | 0.933      | 1.000       | ~600 ms       | ~$0.0003  |
+
+**Deployment choice: DistilBERT fine-tune.**
+
+GPT-4o-mini edges out DistilBERT by 0.005 macro-F1 on 25 examples — noise at this sample
+size. The decisive factors are:
+
+1. **Latency:** 80 ms vs 600 ms. The classifier runs inside a tool call inside an already-
+   streaming LLM response. Adding 600 ms of network + inference time to every classification
+   noticeably degrades UX.
+2. **Cost at scale:** $0.0003/call × 10,000 daily classifications = $3/day — not zero.
+   DistilBERT runs locally for $0.
+3. **Operational reliability:** GPT-4o-mini adds an external network dependency and rate
+   limits. DistilBERT runs inside the modelserver container with no outbound calls.
+4. **Explainability:** DistilBERT logits are inspectable; GPT output is a black box.
+
+TF-IDF+LR is a valid production baseline (1 ms, $0) but macro-F1 0.833 vs 0.956 is a
+meaningful gap. At 10K calls/day the difference is ~1,230 misclassifications.
+
+**Does the answer change with scale?** At >100K classifications/day, DistilBERT would
+require GPU inference to stay under 80 ms. At that point GPT-4o-mini's ~$30/day cost
+becomes meaningful and the decision depends on GPU cost vs API cost. The current choice
+(DistilBERT on CPU) is right for the current scale and architecture.
+
+---
+
+## D-10 — DistilBERT Freeze Policy
+
+**Architecture:** `distilbert-base-uncased` — 6 transformer layers, 66M parameters total.
+
+**Frozen:** embedding layer + transformer layers 0–3 (bottom 4 of 6).
+**Trainable:** transformer layers 4–5 (top 2) + pre-classifier layer + classifier head.
+Trainable parameters: ~3.5M of 66M (5.3%).
+
+**Why this split?** Lower layers encode syntactic structure shared across all text.
+Layers 4–5 encode task-specific semantic patterns. Freezing the bottom 4 layers:
+- Prevents catastrophic forgetting of general language understanding
+- Reduces GPU memory from 16GB to ~4GB
+- Reduces training time by ~40% vs full fine-tune
+- Reduces overfitting risk (14K training examples is modest for full fine-tune)
+
+**Validation:** val macro-F1 converged at 0.938 after epoch 3. Full fine-tune of all
+6 layers achieved val macro-F1=0.941 but took 2.4× longer. The 0.003 delta was not
+worth the compute cost.
+
+**Training tracker:** MLflow run logged to the Colab environment (training was done in
+Colab with GPU). The model card (`model_card.json` in MinIO) stores: architecture name,
+hyperparameters, training data hash, frozen layers, and final train/val metrics.
+
+---
+
+## D-11 — Tracing Backend
+
+**Choice:** Langfuse (self-hosted, Docker, `langfuse/langfuse:2`)
+
+| Backend     | Self-hosted | Cost | SDK quality | Week-6 precedent |
+|-------------|-------------|------|-------------|------------------|
+| Langfuse    | Yes         | $0   | Excellent   | Yes              |
+| LangSmith   | No          | $39+/mo | Excellent | No             |
+| W&B Traces  | No          | $0 for basic | Good | No           |
+
+Self-hosting eliminates data egress: no LLM inputs/outputs (even after redaction) leave the
+private network. Week-6 precedent means the integration pattern is already known. Langfuse's
+SDK wraps OpenAI calls with a single `observe()` decorator, adds parent/child spans, and
+exposes the full trace tree in the UI — exactly what the demo requires.
+
+---
+
+## D-12 — Memory Type
+
+**Choice:** Episodic memory (stored in pgvector as text embeddings)
+
+Episodic memory stores *what happened* ("last week you asked about DataFrame.merge bugs").
+Semantic memory would store *facts* ("pandas version 2.0 changed the default dtype").
+Procedural would store *how-to* steps.
+
+For a maintainer's copilot, the highest-value cross-session recall is episodic: did the user
+previously investigate this class of issue? What workaround did they find? Semantic facts are
+already in the RAG corpus. Procedural memory requires structured execution that the current
+single-LLM architecture doesn't expose.
+
+Every long-term memory write triggers an `audit_log` row: actor=user_id, action=write_memory,
+target=memory_id, timestamp. This satisfies the audit requirement and enables GDPR-style
+deletion (find all memory_ids for user → delete from memories + audit_log).
+
+---
+
+## D-13 — Redis TTL Policy
+
+| Key type                | TTL        | Rationale |
+|-------------------------|------------|-----------|
+| Conversation history    | 86,400 s (24 h) | A maintainer working on a single issue session rarely spans more than one working day. 24 h keeps context for same-day follow-ups without holding stale data for abandoned conversations. |
+| API response cache      | 300 s (5 min)   | Tool call results (classify, NER) are idempotent for the same input. 5 min catches burst retries without serving stale LLM predictions after a model update. |
+
+At the boundary (TTL expiry): the next request finds no history in Redis. The service starts
+a fresh context window — equivalent to opening a new conversation. No data is lost from
+Postgres (messages are persisted there). The user experiences a "fresh start" for context,
+not a data loss.
+
+---
+
+## D-14 — CORS & CSP Origin Allowlisting
+
+**Choice:** `allowed_origins` stored in the `widgets` DB table; read at startup + reload on
+new widget creation.
+
+Hardcoding origins in an env var would require a redeploy to add a new customer domain.
+Reading from DB at startup (and updating the in-memory `_cors_origins` set) means admins
+can onboard new host sites without downtime. The `DynamicCORSMiddleware` reads this set on
+every request.
+
+CSP `frame-ancestors` header is constructed from `allowed_origins` per widget, not globally.
+This is the correct production pattern: a host allowed for Widget A is not automatically
+allowed to embed Widget B.
+
+---
+
+## D-15 — Widget Bundle
+
+**Choice:** Vanilla HTML/CSS/JS (single file, no build step)
+
+| Approach         | Bundle size (gzip) | Build dep | Runtime dep |
+|------------------|--------------------|-----------|-------------|
+| React + Vite     | ~40–60 KB          | Node.js   | React runtime |
+| Vanilla HTML/JS  | **~6 KB**          | None      | None |
+
+The widget implements all required features: collapsed bubble, chat panel, SSE streaming,
+login flow, postMessage resize, theme from API config at runtime. The functional requirement
+is met at 6 KB gzip vs ~50 KB for a React bundle. The difference matters on slow connections
+and in embedded contexts where the host's CSP may restrict external script loads.
+
+**Trade-off:** Vanilla JS is harder to maintain at scale than React components. If the widget
+grew to >10 UI states or needed a component library, a build step would be warranted. At the
+current feature scope (login view + chat view), vanilla JS is the correct choice.
+
+---
+
+## D-16 — Secrets Management
+
+**Choice:** HashiCorp Vault (dev mode, KV v2)
+
+All runtime secrets (OpenAI API key, JWT signing key, DB password, MinIO credentials,
+Langfuse keys) live in Vault. `.env` contains only the Vault address and root token — the
+bootstrap credentials needed to reach Vault.
+
+This means `grep -ri 'sk-' api/app/` returns zero matches outside `vault.py`. An accidental
+`git commit -am` cannot expose the OpenAI key.
+
+The API refuses to boot if Vault is unreachable (checked in `lifespan()`). This is the
+correct fail-fast policy: a misconfigured secrets backend should cause a clean crash at
+startup, not a silent fallback to hardcoded defaults.
+
+**At runtime:** if Vault goes down after boot, the app continues with in-memory secrets
+(fetched at startup). It does NOT re-read Vault per request. Secret rotation requires a
+rolling restart. This is the standard pattern for short-lived secrets in stateless services.

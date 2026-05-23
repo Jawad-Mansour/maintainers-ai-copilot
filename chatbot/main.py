@@ -13,6 +13,116 @@ API_URL = os.environ.get("API_URL", "http://api:8000")
 
 st.set_page_config(page_title="Maintainer's AI Copilot", layout="wide", page_icon="🤖")
 
+st.markdown(
+    """
+<style>
+/* ── Global ──────────────────────────────── */
+[data-testid="stAppViewContainer"] {
+    background: #0f172a;
+}
+[data-testid="stHeader"] { background: transparent; }
+[data-testid="stSidebar"] {
+    background: #1e293b !important;
+    border-right: 1px solid #334155;
+}
+[data-testid="stSidebar"] * { color: #cbd5e1; }
+
+/* ── Typography fixes ─────────────────────── */
+h1, h2, h3 { color: #f1f5f9 !important; }
+p, label, .stMarkdown { color: #94a3b8; }
+
+/* ── Sidebar nav buttons ─────────────────── */
+[data-testid="stSidebar"] .stButton button {
+    background: transparent;
+    border: 1px solid #334155;
+    color: #cbd5e1;
+    border-radius: 8px;
+    width: 100%;
+    text-align: left;
+    font-weight: 500;
+    transition: background .15s, border-color .15s;
+    padding: 8px 14px;
+}
+[data-testid="stSidebar"] .stButton button:hover {
+    background: #334155;
+    border-color: #475569;
+    color: #f1f5f9;
+}
+
+/* ── Main content area ───────────────────── */
+.main .block-container {
+    padding: 2rem 2.5rem;
+    max-width: 1100px;
+}
+
+/* ── Chat messages ───────────────────────── */
+[data-testid="stChatMessage"] {
+    border-radius: 12px;
+    margin-bottom: 4px;
+}
+[data-testid="stChatMessage"][data-testid*="user"] { background: rgba(99,102,241,.12); }
+
+/* ── Input ───────────────────────────────── */
+[data-testid="stChatInput"] textarea {
+    background: #1e293b;
+    border: 1px solid #334155;
+    color: #f1f5f9;
+    border-radius: 12px;
+}
+.stTextInput input, .stSelectbox select {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    color: #f1f5f9 !important;
+    border-radius: 8px;
+}
+
+/* ── Buttons ─────────────────────────────── */
+.stButton button[kind="primary"],
+.stFormSubmitButton button {
+    background: linear-gradient(135deg, #6366f1, #4f46e5) !important;
+    border: none !important;
+    color: white !important;
+    border-radius: 8px;
+    font-weight: 600;
+    padding: 8px 20px;
+    transition: opacity .15s;
+}
+.stButton button[kind="primary"]:hover,
+.stFormSubmitButton button:hover { opacity: .88; }
+
+/* ── Expanders ───────────────────────────── */
+[data-testid="stExpander"] {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 10px;
+}
+
+/* ── Metrics / stats ─────────────────────── */
+[data-testid="metric-container"] {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    padding: 16px;
+}
+
+/* ── DataFrames ──────────────────────────── */
+[data-testid="stDataFrame"] { border-radius: 10px; overflow: hidden; }
+
+/* ── Divider ─────────────────────────────── */
+hr { border-color: #334155 !important; }
+
+/* ── Info / warning boxes ────────────────── */
+[data-testid="stAlert"] { border-radius: 10px; }
+
+/* ── Tabs ────────────────────────────────── */
+[data-testid="stTabs"] [role="tab"] { color: #94a3b8; font-weight: 500; }
+[data-testid="stTabs"] [role="tab"][aria-selected="true"] { color: #6366f1 !important; }
+[data-testid="stTabs"] [role="tablist"] { border-bottom: 1px solid #334155; }
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
 for _k, _v in [
     ("token", None),
     ("role", None),
@@ -67,7 +177,7 @@ def _register(email: str, password: str) -> bool:
 def _new_conv() -> str | None:
     try:
         r = httpx.post(f"{API_URL}/conversations", headers=_h(), timeout=10)
-        if r.status_code == 200:
+        if r.status_code in (200, 201):
             return r.json()["id"]
     except Exception:
         pass
@@ -234,7 +344,7 @@ def page_widgets() -> None:
         for w in widgets:
             with st.expander(f"`{w['id'][:8]}…`  —  {w.get('greeting', '')}"):
                 st.json(w)
-                base = os.environ.get("API_URL", "http://localhost:8000")
+                base = os.environ.get("API_PUBLIC_URL", "http://localhost:8000")
                 st.code(
                     f'<script src="{base}/widget.js" data-widget-id="{w["id"]}"></script>',
                     language="html",
@@ -246,6 +356,7 @@ def page_widgets() -> None:
     st.divider()
     st.subheader("Create widget")
     with st.form("wf"):
+        name = st.text_input("Widget name", value="My Copilot Widget")
         greeting = st.text_input(
             "Greeting", value="Hi! I'm the Maintainer's Copilot. How can I help?"
         )
@@ -256,6 +367,7 @@ def page_widgets() -> None:
         position = st.selectbox("Position", ["bottom-right", "bottom-left"])
         if st.form_submit_button("Create"):
             payload = {
+                "name": name,
                 "greeting": greeting,
                 "allowed_origins": [o.strip() for o in origins_raw.split(",") if o.strip()],
                 "theme": {"primary_color": color, "position": position},
@@ -278,21 +390,22 @@ def page_admin() -> None:
         st.warning("Admin access required.")
         return
 
-    t_users, t_audit = st.tabs(["Promote user", "Audit log"])
+    t_users, t_audit = st.tabs(["Invite user", "Audit log"])
 
     with t_users, st.form("pf"):
         inv_email = st.text_input("User email")
-        inv_role = st.selectbox("New role", ["user", "admin"])
-        if st.form_submit_button("Update role"):
+        inv_pw = st.text_input("Password", type="password")
+        inv_role = st.selectbox("Role", ["user", "admin"])
+        if st.form_submit_button("Invite user"):
             try:
                 r = httpx.post(
-                    f"{API_URL}/admin/promote",
+                    f"{API_URL}/admin/invite",
                     headers=_h(),
-                    json={"email": inv_email, "role": inv_role},
+                    json={"email": inv_email, "password": inv_pw, "role": inv_role},
                     timeout=10,
                 )
-                if r.status_code == 200:
-                    st.success(f"Updated {inv_email} → {inv_role}")
+                if r.status_code in (200, 201):
+                    st.success(f"Invited {inv_email} as {inv_role}")
                 else:
                     st.error(r.text)
             except Exception as exc:
@@ -300,7 +413,7 @@ def page_admin() -> None:
 
     with t_audit:
         try:
-            r = httpx.get(f"{API_URL}/admin/audit", headers=_h(), timeout=10)
+            r = httpx.get(f"{API_URL}/admin/audit-log", headers=_h(), timeout=10)
             entries = r.json() if r.status_code == 200 else []
             if entries:
                 df = pd.DataFrame(entries)

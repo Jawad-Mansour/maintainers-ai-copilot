@@ -32,7 +32,7 @@ async def register(db: AsyncSession, req: RegisterRequest, signing_key: str) -> 
     await db.commit()
     await db.refresh(user)
     token = create_access_token(str(user.id), user.role, signing_key)
-    return LoginResponse(access_token=token)
+    return LoginResponse(access_token=token, role=role)
 
 
 async def invite(
@@ -68,7 +68,7 @@ async def login(db: AsyncSession, req: LoginRequest, signing_key: str) -> LoginR
     if not user.is_active:
         raise AuthenticationError("Account is disabled")
     token = create_access_token(str(user.id), user.role, signing_key)
-    return LoginResponse(access_token=token)
+    return LoginResponse(access_token=token, role=user.role)
 
 
 async def get_me(db: AsyncSession, user_id: str) -> UserOut:

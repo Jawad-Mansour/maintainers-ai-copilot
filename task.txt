@@ -1,0 +1,80 @@
+you need to read each and every file of the following
+
+1- @api/alembic/env.py  in api/alembic
+
+2- @api/alembic.ini  @api/__init__.py  @api/config.py  @api/dependencies.py  @api/main.py  @api/Dockerfile  in api root
+
+3- @api/tests/__init__.py  is basically empty @api/prompts/hyde.md
+@api/prompts/summarize.md  @api/prompts/system.md  in prompts folder
+
+4- @api/app/api/routes/__init__.py   @api/app/api/routes/admin.py  @api/app/api/routes/auth.py  @api/app/api/routes/chat.py  @api/app/api/routes/conversations.py  @api/app/api/routes/embed.py  @api/app/api/routes/health.py  @api/app/api/routes/memories.py  @api/app/api/routes/rag.py  @api/app/api/routes/widgets.py  @api/app/api/__init__.py   in api/app/api
+
+5- @api/app/domain/__init__.py  @api/app/domain/models.py
+
+6- @api/app/infra/db/__init__.py  @api/app/infra/db/base.py  @api/app/domain/models.py  @api/app/infra/db/session.py
+
+7- @api/app/infra/__init__.py  @api/app/infra/jwt_handler.py  @api/app/infra/minio_client.py  @api/app/infra/modelserver_client.py  @api/app/infra/observability.py  @api/app/infra/openai_client.py  @api/app/infra/prompts.py  @api/app/infra/redaction.py  @api/app/infra/redis_client.py  @api/app/infra/vault.py
+
+8- @api/app/repositories/__init__.py  @api/app/repositories/audit_repo.py  @api/app/repositories/chunk_repo.py  @api/app/repositories/conversation_repo.py  @api/app/repositories/memory_repo.py  @api/app/repositories/message_repo.py  @api/app/repositories/user_repo.py  @api/app/repositories/widget_repo.py
+
+9- @api/app/services/__init__.py  @api/app/services/auth_service.py  @api/app/services/chat_service.py  @api/app/services/chunker.py  @api/app/services/conversation_service.py  @api/app/services/rag_service.py  @api/app/services/widget_service.py
+
+10- @api/app/tools/__init__.py  @api/app/tools/definitions.py  @api/app/tools/executor.py
+
+11- @api/app/__init__.py   @api/app/exceptions.py
+
+12- @api/Dockerfile
+
+13- @chatbot/main.py  @chatbot/Dockerfile
+
+note that i uploaded an image of the data folder and db  , be ware of it it contains weights ... you need to check them too
+
+14- @evals/golden_classification.json  @evals/golden_rag.json  @evals/run_classification_eval.py  @evals/run_rag_eval.py
+
+15-  @host/Dockerfile
+
+16- @modelserver/app/__init__.py  @modelserver/app/classical.py  @modelserver/app/classifier.py  @modelserver/app/ner.py  @modelserver/app/reranker.py  @modelserver/app/summarizer.py  @modelserver/app/vault.py  @modelserver/app/weights.py
+
+17- @modelserver/Dockerfile  @modelserver/main.py
+
+18- @notebooks/train_classifier.ipynb
+
+19- @scripts/bulk_ingest_corpus.py  @scripts/download_issues.py  @scripts/process_issues.py  @scripts/seed_rag_corpus.py  @scripts/upload_to_minio.py
+
+you can forget about the test folder until now
+
+20- @widget/index.html  @widget/Dockerfile
+
+21-  @docker-compose.yml
+
+22- the screenshot about the maintainers_ai_copilot_egg-info contains 4 files
+
+the following .env
+
+# Bootstrap only — these values tell the app WHERE Vault is.
+# All actual secrets (DB password, OpenAI key, JWT key, MinIO creds, Langfuse keys)
+# are fetched from Vault at startup. Do NOT add secrets here.
+
+# Vault
+VAULT_ADDR=http://vault:8200
+VAULT_TOKEN=root
+
+# Passed to vault-init so it seeds the real key into Vault on first boot.
+# The app itself NEVER reads this — it always fetches from Vault.
+OPENAI_API_KEY=sk-YOUR-OPENAI-KEY
+
+# Service ports (exposed on host for local dev)
+POSTGRES_PORT=5433
+REDIS_PORT=6379
+MINIO_PORT=9000
+MINIO_CONSOLE_PORT=9001
+API_PORT=8000
+CHATBOT_PORT=8501
+WIDGET_PORT=5173
+LANGFUSE_PORT=3000
+MODELSERVER_PORT=8001
+
+GITHUB_TOKEN=ghp_YOUR-GITHUB-TOKEN
+
+
+@eval_classification_report.json  @eval_rag_report.json  @eval_thresholds.yaml  @pyproject.toml  @.pre-commit-config.yaml

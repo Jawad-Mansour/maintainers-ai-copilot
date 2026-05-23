@@ -78,6 +78,12 @@ def download_and_verify(mc: Minio) -> dict:
 
     # Verify main weights file
     weights_sha = card.get("weights_sha256", "")
+    if not weights_sha:
+        print(
+            "[WARNING] model_card.json missing 'weights_sha256' "
+            "— skipping DistilBERT integrity check",
+            flush=True,
+        )
     if weights_sha:
         model_file = distilbert_dir / "model.safetensors"
         if not model_file.exists():
@@ -100,6 +106,11 @@ def download_and_verify(mc: Minio) -> dict:
         raise WeightsNotFound(f"tfidf_vectorizer.pkl not found: {exc}") from exc
 
     tfidf_sha = card.get("tfidf_sha256", "")
+    if not tfidf_sha:
+        print(
+            "[WARNING] model_card.json missing 'tfidf_sha256' — skipping TF-IDF integrity check",
+            flush=True,
+        )
     if tfidf_sha:
         actual = _sha256_file(tfidf_path)
         if actual != tfidf_sha:
@@ -115,6 +126,11 @@ def download_and_verify(mc: Minio) -> dict:
         raise WeightsNotFound(f"lr_model.pkl not found: {exc}") from exc
 
     lr_sha = card.get("lr_sha256", "")
+    if not lr_sha:
+        print(
+            "[WARNING] model_card.json missing 'lr_sha256' — skipping LR model integrity check",
+            flush=True,
+        )
     if lr_sha:
         actual = _sha256_file(lr_path)
         if actual != lr_sha:

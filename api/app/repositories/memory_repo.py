@@ -19,7 +19,7 @@ async def search_by_similarity(
 ) -> list[dict[str, Any]]:
     vec_str = f"[{','.join(map(str, query_vec))}]"
     sql = text("""
-        SELECT id, summary,
+        SELECT id, summary, created_at,
                1 - (embedding <=> CAST(:vec AS vector)) AS score
         FROM memories
         WHERE user_id = :user_id

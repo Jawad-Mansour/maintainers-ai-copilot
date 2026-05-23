@@ -20,9 +20,9 @@ import httpx
 import yaml
 from config import get_settings
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from langfuse import Langfuse
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.api.routes.admin import router as admin_router
 from app.api.routes.auth import router as auth_router
@@ -40,6 +40,7 @@ from app.infra.modelserver_client import ModelServerClient
 from app.infra.observability import configure_logging, get_logger
 from app.infra.redis_client import build_redis
 from app.infra.vault import VaultSecrets, fetch_vault_secrets
+from app.repositories import widget_repo
 
 THRESHOLDS_FILE = Path(__file__).parent.parent / "eval_thresholds.yaml"
 
@@ -125,6 +126,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.secrets = secrets
     app.state.settings = settings
     app.state.session_factory = build_session_factory(secrets.db_url)
+
+    # Extend CORS origins with all widget allowed_origins from DB
+    try:
+        async with app.state.session_factory() as _db:
+            _widget_origins = await widget_repo.get_all_allowed_origins(_db)
+        _cors_origins.update(_widget_origins)
+    except Exception as exc:
+        print(f"[BOOT WARNING] Could not load widget CORS origins from DB: {exc}", file=sys.stderr)
     app.state.redis_client = build_redis(settings.redis_host)
     app.state.minio_client = build_minio(
         secrets.minio_endpoint,
@@ -146,25 +155,71 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(title="Maintainer's AI Copilot", version="0.1.0", lifespan=lifespan)
 
-# CORS origins come from the CORS_ORIGINS env var (comma-separated).
-# Wildcard "*" with allow_credentials=True is rejected by all browsers.
-# In docker-compose, set CORS_ORIGINS to the widget + chatbot origins.
-_cors_origins = [
+# Static CORS origins from env var — extended with widget DB allowed_origins at startup.
+_static_cors: set[str] = {
     o.strip()
     for o in os.environ.get(
         "CORS_ORIGINS",
         "http://localhost:8501,http://localhost:5173,http://localhost:3001,http://localhost:3000",
     ).split(",")
     if o.strip()
-]
+}
+_cors_origins: set[str] = set(_static_cors)  # mutated in lifespan with widget DB origins
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+class DynamicCORSMiddleware:
+    """Pure ASGI CORS middleware — origins = env var list ∪ DB widget allowed_origins."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        from starlette.datastructures import Headers
+
+        headers = Headers(scope=scope)
+        origin = headers.get("origin", "")
+        method = scope.get("method", "")
+        allowed = bool(origin) and origin in _cors_origins
+
+        if method == "OPTIONS" and allowed:
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 200,
+                    "headers": [
+                        (b"access-control-allow-origin", origin.encode()),
+                        (b"access-control-allow-credentials", b"true"),
+                        (
+                            b"access-control-allow-methods",
+                            b"GET, POST, PUT, DELETE, OPTIONS, PATCH",
+                        ),
+                        (b"access-control-allow-headers", b"authorization, content-type, accept"),
+                        (b"access-control-max-age", b"3600"),
+                        (b"vary", b"origin"),
+                    ],
+                }
+            )
+            await send({"type": "http.response.body", "body": b""})
+            return
+
+        async def send_with_cors(message: dict) -> None:
+            if message["type"] == "http.response.start" and allowed:
+                extra = [
+                    (b"access-control-allow-origin", origin.encode()),
+                    (b"access-control-allow-credentials", b"true"),
+                    (b"vary", b"origin"),
+                ]
+                message = {**message, "headers": list(message.get("headers", [])) + extra}
+            await send(message)
+
+        await self.app(scope, receive, send_with_cors)
+
+
+app.add_middleware(DynamicCORSMiddleware)
 
 
 # ── Request middleware: bind trace_id to every structlog context ───────────

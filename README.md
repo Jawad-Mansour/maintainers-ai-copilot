@@ -28,7 +28,7 @@ An authenticated AI chatbot for open-source maintainers to triage GitHub issues.
 | Secrets | HashiCorp Vault (all secrets — `.env` holds only bootstrap vars) |
 | Tracing | Langfuse |
 | Evaluation | RAGAS |
-| Frontend | React + Vite + Tailwind CSS (embeddable widget) |
+| Frontend | Vanilla HTML/CSS/JS ~6 KB gzip (embeddable widget) |
 | Admin UI | Streamlit |
 
 ## Quick Start
@@ -63,11 +63,24 @@ app/infra/          ← Vault, Redis, MinIO, LLM, redaction adapters
 | Doc | Contents |
 |---|---|
 | [ARCH.md](ARCH.md) | System architecture, service map, request flow, RAG pipeline |
-| [DECISIONS.md](resources/DECISIONS.md) | All 18 technical decisions with justifications and tradeoffs |
+| [DECISIONS.md](DECISIONS.md) | All 16 technical decisions with justifications and numbers |
 | [RUNBOOK.md](RUNBOOK.md) | First boot, service URLs, common ops, debugging guide |
 | [EVALS.md](EVALS.md) | Evaluation methodology, golden sets, thresholds, measured results |
 | [SECURITY.md](SECURITY.md) | Redaction patterns with pattern-by-pattern justification |
 
 ## Submission
 
-Tag: `v0.1.0-week7` | Deadline: Thursday May 21, 2026 @ 12:00 PM
+```
+Project 7 - Jawad Mansour
+Tag: v0.1.0-week7
+Dataset: pandas-dev/pandas issues, 10012 train / 2145 val / 2146 test
+Classification — Classical: F1=0.833 | Fine-tuned: F1=0.956 | LLM: F1=0.961
+Deployment choice: DistilBERT - because 80ms latency vs 600ms for GPT-4o-mini, $0 cost, same accuracy
+Embedding model: text-embedding-3-small - chosen because hit@5=0.84 vs ada-002 hit@5=0.76 on golden set
+RAG — hit@5=0.84 | MRR@10=0.71 | Faithfulness=0.70 (threshold) | Answer relevancy=0.70 (threshold)
+Long-term memory type: episodic
+Tracing backend: Langfuse - chosen because self-hosted (no data egress), SDK wraps OpenAI natively
+Widget bundle size: ~6 KB (gzipped)
+LLM: OpenAI gpt-4o-mini
+README contains: ARCH.md, DECISIONS.md, RUNBOOK.md, EVALS.md, SECURITY.md
+```
